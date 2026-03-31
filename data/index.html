@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YoloHome Local Console</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="brand-box">
+      <div class="logo-animate">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>YoloHome</h1>
+        <span>Local Console</span>
+      </div>
+    </div>
+    
+    <nav class="nav-menu">
+      <div class="nav-item active" data-target="page-overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        <span>Tổng quan</span>
+      </div>
+      <div class="nav-item" data-target="page-devices">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        <span>Ngoại vi & Điều khiển</span>
+      </div>
+      <div class="nav-item" data-target="page-automation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        <span>TinyML & Tự động hóa</span>
+      </div>
+      <div class="nav-item" data-target="page-cloud">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+        <span>Kết nối Mạng & Cloud</span>
+      </div>
+      <div class="nav-item" data-target="page-settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Quản lý Hệ thống</span>
+      </div>
+      <div class="nav-item" data-target="page-info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>Tác giả</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-indicator">
+        <span class="pulse-dot" id="ws-dot"></span> <span id="ws-text">Đang kết nối...</span>
+      </div>
+      <div class="status-indicator" style="background: rgba(0,0,0,0.2);">
+        <span class="pulse-dot" id="cloud-dot" style="background:#f59e0b; box-shadow:none;"></span> <span id="cloud-text">Đang tải...</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    
+    <section id="page-overview" class="page active">
+      <header class="top-header">
+        <div>
+          <h1>Tổng quan Hệ thống</h1>
+          <p>Chế độ vận hành: <strong id="badge-override" style="color:var(--primary);">AUTO</strong> | Địa chỉ IP: <span id="badge-ip" class="mono">0.0.0.0</span></p>
+        </div>
+      </header>
+
+      <div class="bento-grid-2">
+        <div class="card stat-card gradient-orange">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path></svg></div>
+          <div class="stat-info">
+            <span class="stat-label">Nhiệt độ</span>
+            <div class="stat-value"><span id="temp-value">--</span><small>°C</small></div>
+            <span class="stat-sub" id="env-state">Đang đồng bộ...</span>
+          </div>
+          <div class="bg-decoration"></div>
+        </div>
+        
+        <div class="card stat-card gradient-blue">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.74 5.88a6 6 0 0 1-8.48 8.48A6 6 0 0 1 5.53 9.93L12 2.69z"></path></svg></div>
+          <div class="stat-info">
+             <span class="stat-label">Độ ẩm</span>
+             <div class="stat-value"><span id="humi-value">--</span><small>%</small></div>
+             <span class="stat-sub">Cảm biến DHT20</span>
+          </div>
+          <div class="bg-decoration"></div>
+        </div>
+
+        <div class="card stat-card gradient-green">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg></div>
+          <div class="stat-info">
+             <span class="stat-label">Độ tin cậy AI</span>
+             <div class="stat-value"><span id="tiny-score">--</span><small>/1</small></div>
+             <span class="stat-sub">Hệ số Smooth: <span id="tiny-smooth">--</span></span>
+          </div>
+          <div class="bg-decoration"></div>
+        </div>
+
+        <div class="card stat-card gradient-purple">
+          <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
+          <div class="stat-info">
+             <span class="stat-label">Tốc độ quạt</span>
+             <div class="stat-value"><span id="auto-target-speed">0</span><small>%</small></div>
+             <span class="stat-sub">Thời gian chạy: <span id="auto-elapsed">0m</span></span>
+          </div>
+          <div class="bg-decoration"></div>
+        </div>
+      </div>
+
+      <div class="bento-grid-2 margin-top">
+        <div class="card chart-card">
+          <div class="card-header">
+              <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg> Biểu đồ Môi trường</h4>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="sensorChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card chart-card">
+          <div class="card-header">
+            <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l3-9 5 18 3-9h5"></path></svg> Suy diễn TinyML</h4>
+          </div>
+          <div class="tinyml-container">
+            <div class="tinyml-data">
+                <div class="data-item">
+                    <span>Kết quả Dự đoán</span>
+                    <strong id="tiny-pred" class="highlight-text">--</strong>
+                </div>
+                <div class="data-item">
+                    <span>Thực tế (Ground Truth)</span>
+                    <strong id="tiny-gt" class="mono">--</strong>
+                </div>
+                <div class="data-item">
+                    <span>Độ chính xác</span>
+                    <strong id="tiny-acc" class="mono">--%</strong>
+                </div>
+            </div>
+            <div class="tinyml-visual">
+                <div class="mini-chart" id="tiny-bars"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-devices" class="page">
+      <header class="top-header">
+        <h1>Ngoại vi & Điều khiển</h1>
+      </header>
+      <div class="bento-grid-2">
+        
+        <div class="card">
+          <div class="card-header">
+            <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg> Cấu hình Quạt</h4>
+          </div>
+          <div class="device-items">
+            <div class="device-item" style="flex-direction: column; align-items: stretch; gap: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="d-info">
+                  <span id="fan-state-text">Trạng thái: --</span>
+                  <small id="fan-chip">AUTO</small>
+                </div>
+              </div>
+              <div class="input-group">
+                <label>Tốc độ: <span id="fan-speed-readout" class="mono">70%</span></label>
+                <input type="range" id="fan-speed-slider" class="range-slider" min="0" max="100" step="5" value="70">
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn-action primary" id="btn-fan-on">Bật quạt thủ công</button>
+                <button class="btn-action secondary" id="btn-fan-auto">Chế độ Auto</button>
+                <button class="btn-action danger" id="btn-fan-off">Tắt quạt thủ công</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M6.34 17.66l-1.41 1.41"></path><path d="M19.07 4.93l-1.41 1.41"></path></svg> Cấu hình LED RGB</h4>
+          </div>
+          <div class="device-items">
+            <div class="device-item" style="flex-direction: column; align-items: stretch; gap: 15px;">
+              <div class="light-preview" id="light-preview"></div>
+              <div class="form-row">
+                <div class="input-group">
+                  <label>Màu sắc</label>
+                  <input type="color" id="light-color" value="#ffffff" style="height: 46px; cursor: pointer; padding: 2px;">
+                </div>
+                <div class="input-group">
+                  <label>Độ sáng: <span id="light-brightness-readout" class="mono">100%</span></label>
+                  <input type="range" id="light-brightness" class="range-slider" min="0" max="100" step="1" value="100" style="margin-top: 15px;">
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn-action primary" id="btn-light-on">Bật đèn</button>
+                <button class="btn-action danger" id="btn-light-off">Tắt đèn</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg> Trạng thái I/O Runtime</h4>
+          </div>
+          <div class="device-list-grid" id="device-list">
+            </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> Chỉ thị Onboard</h4>
+          </div>
+          <div class="device-items">
+            <div class="device-item">
+              <div class="d-info">
+                <span>Trạng thái LED1</span>
+                <small class="mono">Đèn trạng thái đơn</small>
+              </div>
+              <button class="toggle-btn" id="toggle-led1">TẮT</button>
+            </div>
+            <div class="device-item">
+              <div class="d-info">
+                <span>Trạng thái LED2</span>
+                <small class="mono">Đèn trạng thái RGB</small>
+              </div>
+              <button class="toggle-btn" id="toggle-led2">TẮT</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-automation" class="page">
+      <header class="top-header">
+        <h1>TinyML & Tự động hóa</h1>
+      </header>
+      <div class="bento-grid-2">
+        <div class="card">
+            <div class="card-header">
+                <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg> Ngưỡng Cảnh báo & AI</h4>
+            </div>
+            <form id="automation-form" class="modern-form">
+                <div class="form-row">
+                    <div class="input-group"><label>Nhiệt độ cực thấp (&lt; °C)</label><input type="number" id="temp-cold" step="0.1"></div>
+                    <div class="input-group"><label>Nhiệt độ cực cao (&gt; °C)</label><input type="number" id="temp-hot" step="0.1"></div>
+                </div>
+                <div class="form-row">
+                    <div class="input-group"><label>Độ ẩm cảnh báo khô (&lt; %)</label><input type="number" id="humi-dry" step="0.1"></div>
+                    <div class="input-group"><label>Độ ẩm cảnh báo ẩm (&gt; %)</label><input type="number" id="humi-humid" step="0.1"></div>
+                </div>
+                <div class="form-row">
+                    <div class="input-group"><label>Hệ số AI Threshold (Bật)</label><input type="number" id="ai-on" min="0" max="1" step="0.01"></div>
+                    <div class="input-group"><label>Hệ số AI Threshold (Tắt)</label><input type="number" id="ai-off" min="0" max="1" step="0.01"></div>
+                </div>
+                <div class="form-row">
+                    <div class="input-group"><label>Thời gian chờ Manual (phút)</label><input type="number" id="override-minutes" min="1" step="1"></div>
+                    <div class="input-group" style="display:flex; align-items:center; gap: 10px; margin-top:20px;">
+                      <label style="margin:0;">Chế độ Auto Fan</label>
+                      <button type="button" class="toggle-btn" id="btn-auto-fan">TẮT</button>
+                    </div>
+                </div>
+                <button class="btn-action primary" type="submit">Lưu Ngưỡng</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg> Đặc tuyến Quạt (Chế độ Auto)</h4>
+            </div>
+            <form id="ramp-form" class="modern-form">
+                <div class="form-row" style="grid-template-columns: 1fr 1fr 1fr;">
+                    <div class="input-group"><label>Tốc độ Bắt đầu (%)</label><input type="number" id="fan-ramp-start" min="0" max="100"></div>
+                    <div class="input-group"><label>Tốc độ Giữa (%)</label><input type="number" id="fan-ramp-mid" min="0" max="100"></div>
+                    <div class="input-group"><label>Tốc độ Tối đa (%)</label><input type="number" id="fan-ramp-end" min="0" max="100"></div>
+                </div>
+                <div class="form-row">
+                    <div class="input-group"><label>Thời gian đạt Mid (phút)</label><input type="number" id="fan-ramp-mid-minutes" min="1"></div>
+                    <div class="input-group"><label>Thời gian đạt Max (phút)</label><input type="number" id="fan-ramp-full-minutes" min="2"></div>
+                </div>
+                <div class="ramp-visual">
+                    <div class="ramp-stage"><span>Start</span><strong id="viz-start">50%</strong></div>
+                    <div class="ramp-arrow"></div>
+                    <div class="ramp-stage"><span>Mid</span><strong id="viz-mid">70%</strong></div>
+                    <div class="ramp-arrow"></div>
+                    <div class="ramp-stage"><span>Max</span><strong id="viz-end">100%</strong></div>
+                </div>
+                <button class="btn-action dark" type="submit">Lưu Đặc tuyến</button>
+            </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-cloud" class="page">
+      <header class="top-header">
+        <h1>Kết nối Mạng & Cloud</h1>
+      </header>
+      <div class="bento-grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg> Điểm truy cập WiFi (STA)</h4>
+          </div>
+          <form id="wifi-form" class="modern-form">
+            <div class="input-group">
+                <label>SSID (Tên mạng)</label>
+                <input type="text" id="wifi-ssid" placeholder="Nhập tên mạng">
+            </div>
+            <div class="input-group">
+                <label>Password (Mật khẩu)</label>
+                <div class="pwd-wrapper">
+                    <input type="password" id="wifi-pass" placeholder="Nhập mật khẩu">
+                    <button type="button" class="btn-eye" id="toggle-wifi-pass">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
+            </div>
+            <button class="btn-action primary" type="submit">Lưu cấu hình WiFi</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h4><svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg> Thông số MQTT Adafruit IO</h4>
+          </div>
+          <form id="aio-form" class="modern-form">
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="aio-username" placeholder="Adafruit IO Username">
+            </div>
+            <div class="input-group">
+                <label>AIO Key</label>
+                <div class="pwd-wrapper">
+                    <input type="password" id="aio-key" placeholder="Chuỗi định danh bảo mật">
+                    <button type="button" class="btn-eye" id="toggle-aio-key">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="input-group"><label>Định danh Feed (Prefix)</label><input type="text" id="aio-feed-prefix" placeholder="Mặc định: yolohome"></div>
+            <button class="btn-action dark" type="submit">Lưu cấu hình Cloud</button>
+          </form>
+          <div id="feed-grid" class="margin-top" style="display:flex; flex-wrap:wrap; gap:10px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-settings" class="page">
+      <header class="top-header">
+        <h1>Quản lý Hệ thống</h1>
+      </header>
+      <div class="center-wrapper">
+        <div class="card settings-card" style="max-width: 650px; padding: 40px; border-color: var(--danger);">
+          <div style="text-align: center;">
+            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </div>
+            <h2 style="color:var(--danger); font-size: 22px; margin-bottom: 15px;">Khôi phục Cài đặt gốc (Factory Reset)</h2>
+            <p style="font-size: 14px; color: var(--text-sub); margin-bottom: 30px; line-height: 1.6;">
+              Cảnh báo: Thao tác này sẽ định dạng lại phân vùng LittleFS, xóa vĩnh viễn tệp <code>/info.dat</code> chứa cấu hình WiFi, thông tin MQTT Adafruit IO, và toàn bộ các thông số tự động hóa. <br><br>Hệ thống sẽ tự động khởi động lại và đưa thiết bị về trạng thái cấu hình mặc định ban đầu.
+            </p>
+            <button class="btn-action danger full-width" id="btn-reset" style="padding: 16px; font-size: 16px; font-weight: bold;">Xác nhận Thực thi</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-info" class="page">
+        <header class="top-header">
+            <div>
+              <h1>Tác giả</h1>
+              <p>Khoa Khoa học và Kỹ thuật Máy tính - Đồ án Đa ngành HK252</p>
+            </div>
+        </header>
+        
+        <div class="authors-container">
+            <div class="author-badge">
+                <div class="badge-bg"></div>
+                <div class="badge-content">
+                    <div class="avatar-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <div class="info-box">
+                        <h3>Trần Phương Trường An</h3>
+                        <p class="mssv">2310041</p>
+                        <p class="role">Kỹ thuật Máy tính</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="author-badge">
+                <div class="badge-bg" style="background: linear-gradient(135deg, var(--orange), #fcd34d);"></div>
+                <div class="badge-content">
+                    <div class="avatar-box" style="color: var(--orange);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    </div>
+                    <div class="info-box">
+                        <h3>Nguyễn Trần Đức Hoàng</h3>
+                        <p class="mssv">2311064</p>
+                        <p class="role">Khoa học Máy tính</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="author-badge">
+                <div class="badge-bg" style="background: linear-gradient(135deg, var(--success), #86efac);"></div>
+                <div class="badge-content">
+                    <div class="avatar-box" style="color: var(--success);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <div class="info-box">
+                        <h3>Bành Phú Hội</h3>
+                        <p class="mssv">2311111</p>
+                        <p class="role">Khoa học Máy tính</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="author-badge">
+                <div class="badge-bg" style="background: linear-gradient(135deg, var(--purple), #c084fc);"></div>
+                <div class="badge-content">
+                    <div class="avatar-box" style="color: var(--purple);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    </div>
+                    <div class="info-box">
+                        <h3>Nguyễn Lâm Huy</h3>
+                        <p class="mssv">2311188</p>
+                        <p class="role">Khoa học Máy tính</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="author-badge">
+                <div class="badge-bg" style="background: linear-gradient(135deg, #ec4899, #f9a8d4);"></div>
+                <div class="badge-content">
+                    <div class="avatar-box" style="color: #ec4899;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <div class="info-box">
+                        <h3>Nguyễn Anh Khánh Sơn</h3>
+                        <p class="mssv">2312961</p>
+                        <p class="role">Khoa học Máy tính</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="author-badge">
+                <div class="badge-bg" style="background: linear-gradient(135deg, #0d9488, #5eead4);"></div>
+                <div class="badge-content">
+                    <div class="avatar-box" style="color: #0d9488;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    </div>
+                    <div class="info-box">
+                        <h3>Giang Phi Vân</h3>
+                        <p class="mssv">2313867</p>
+                        <p class="role">Khoa học Máy tính</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="author-badge">
+                <div class="badge-bg" style="background: linear-gradient(135deg, #e11d48, #fda4af);"></div>
+                <div class="badge-content">
+                    <div class="avatar-box" style="color: #e11d48;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    </div>
+                    <div class="info-box">
+                        <h3>Huỳnh Duy Chương</h3>
+                        <p class="mssv">2310363</p>
+                        <p class="role">Khoa học Máy tính</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+  </main>
+
+  <div id="status-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-icon" id="status-modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line>
+        </svg>
+      </div>
+      <h2 id="status-modal-title">Đang áp dụng cấu hình...</h2>
+      <p id="status-modal-message">Vui lòng chờ trong giây lát.</p>
+      <div class="ip-box hidden" id="status-modal-link-box">
+        <a href="#" id="status-modal-link" target="_blank">http://0.0.0.0</a>
+      </div>
+      <div class="modal-actions">
+        <a class="btn-action primary hidden" id="status-modal-primary" href="#" target="_blank">Mở địa chỉ mới</a>
+        <button class="btn-action secondary" id="status-modal-secondary" type="button">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="script.js"></script>
+</body>
+</html>
