@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+uploads/
+face-captures/
+__pycache__/
+*.py[cod]
+webapp/backend/BEDADN/
+webapp/backend/instance/
+webapp/frontend/node_modules/
+webapp/frontend/dist/

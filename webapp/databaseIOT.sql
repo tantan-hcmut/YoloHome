@@ -7,6 +7,8 @@ DROP TABLE IF EXISTS trang_thai_thiet_bi CASCADE;
 DROP TABLE IF EXISTS adafruit_feed_mapping CASCADE;
 DROP TABLE IF EXISTS thiet_bi CASCADE;
 DROP TABLE IF EXISTS nguoi_dung_nha CASCADE;
+DROP TABLE IF EXISTS face_auth_audit CASCADE;
+DROP TABLE IF EXISTS face_profiles CASCADE;
 DROP TABLE IF EXISTS nha CASCADE;
 DROP TABLE IF EXISTS nguoi_dung CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -19,6 +21,28 @@ CREATE TABLE nguoi_dung (
     vai_tro VARCHAR(50) DEFAULT 'user',
     du_lieu_khuon_mat TEXT,
     trang_thai_cap_quyen BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE face_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES nguoi_dung(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    face_token VARCHAR(255) NOT NULL,
+    faceset_token VARCHAR(255),
+    image_hash VARCHAR(128),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_face_profiles_user_id ON face_profiles(user_id);
+
+CREATE TABLE face_auth_audit (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES nguoi_dung(id) ON DELETE SET NULL,
+    face_profile_id INT REFERENCES face_profiles(id) ON DELETE SET NULL,
+    action VARCHAR(100) NOT NULL,
+    confidence FLOAT,
+    success BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE nha (

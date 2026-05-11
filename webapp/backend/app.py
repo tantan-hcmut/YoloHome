@@ -31,6 +31,9 @@ app.register_blueprint(auth_bp)
 from routes.devices import devices_bp
 app.register_blueprint(devices_bp)
 
+from routes.faces import faces_bp
+app.register_blueprint(faces_bp)
+
 # Đăng ký route sensors
 from routes.sensors import sensors_bp
 app.register_blueprint(sensors_bp)
@@ -70,6 +73,9 @@ scheduler.add_job(
 )
 scheduler.start()
 print("[Scheduler] Background sync task started (every 10s)")
+
+with app.app_context():
+    db.create_all()
 
 
 # ==========================================
