@@ -35,6 +35,44 @@ class NguoiDung(db.Model):
         }
 
 
+class FaceProfile(db.Model):
+    """Khuôn mặt đã đăng ký qua Face++."""
+    __tablename__ = 'face_profiles'
+    __table_args__ = {'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('nguoi_dung.id'), nullable=True, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    face_token = db.Column(db.String(255), nullable=False)
+    faceset_token = db.Column(db.String(255), nullable=True)
+    image_hash = db.Column(db.String(128), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('NguoiDung', backref=db.backref('face_profiles', lazy=True, cascade='all, delete-orphan'))
+
+    def to_public_dict(self):
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'createdAt': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class FaceAuthAudit(db.Model):
+    """Audit đăng nhập/mở khóa bằng khuôn mặt."""
+    __tablename__ = 'face_auth_audit'
+    __table_args__ = {'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('nguoi_dung.id'), nullable=True)
+    face_profile_id = db.Column(db.Integer, db.ForeignKey('face_profiles.id'), nullable=True)
+    action = db.Column(db.String(100), nullable=False)
+    confidence = db.Column(db.Float, nullable=True)
+    success = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Nha(db.Model):
     """Ánh xạ tới bảng 'nha' trong database"""
     __tablename__ = 'nha'

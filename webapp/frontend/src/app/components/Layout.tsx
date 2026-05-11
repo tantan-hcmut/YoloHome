@@ -2,19 +2,19 @@ import { Outlet, NavLink, useNavigate } from "react-router";
 import { 
   LayoutDashboard, 
   Cpu, 
-  Calendar,
   Home as HomeIcon, 
-  Settings as SettingsIcon,
   Menu,
   LogOut,
   Mic,
-  MicOff
+  MicOff,
+  ScanFace
 } from "lucide-react";
 import { useState } from "react";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "pastel-sky" },
   { path: "/devices", label: "Devices", icon: Cpu, color: "pastel-mint" },
+  { path: "/faces", label: "Quản lý khuôn mặt", icon: ScanFace, color: "pastel-lavender" },
   // { path: "/schedule", label: "Schedule", icon: Calendar, color: "pastel-lavender" },
   // { path: "/settings", label: "Settings", icon: SettingsIcon, color: "pastel-sage" },
 ];
