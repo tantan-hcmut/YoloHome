@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db, ThietBi, Nha, TrangThaiThietBi, LichSuHoatDong
 from utils.security import require_auth
+from utils.adafruit_sync import get_adafruit_credentials
 import requests
 import json
 import os
@@ -220,8 +221,7 @@ def send_command_to_adafruit(command, device_type='den'):
     yolohome-light & yolohome-fan chỉ là OUTPUT feeds (board publish status)
     """
     try:
-        adafruit_user = os.getenv('ADAFRUIT_IO_USER')
-        adafruit_key = os.getenv('ADAFRUIT_IO_KEY')
+        adafruit_user, adafruit_key, _ = get_adafruit_credentials()
         group_key = os.getenv('ADAFRUIT_GROUP_KEY', 'yolohome')  # Default group key
         
         print(f"[DEBUG] Adafruit User: {adafruit_user}")

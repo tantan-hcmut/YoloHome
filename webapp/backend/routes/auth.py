@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import NguoiDung
+from models import NguoiDung, Nha, NguoiDungNha, db
 from utils.security import generate_token, verify_token, normalize_email, normalize_password, verify_password
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
@@ -51,7 +51,28 @@ def login():
         if not user.trang_thai_cap_quyen:
             return jsonify({'status': 'error', 'message': 'Tài khoản của bạn chưa được cấp quyền'}), 403
 
+        adafruit_username = (data.get('adafruit_username') or '').strip()
+        adafruit_key = (data.get('adafruit_key') or '').strip()
+
+        if adafruit_username or adafruit_key:
+            if not adafruit_username or not adafruit_key:
+                return jsonify({'status': 'error', 'message': 'Adafruit username và API key phải nhập cùng nhau'}), 400
+
+            user_home_link = NguoiDungNha.query.filter_by(nguoi_dung_id=user.id).first()
+            if not user_home_link:
+                return jsonify({'status': 'error', 'message': 'Không tìm thấy nhà để lưu Adafruit credentials'}), 404
+
+            home = Nha.query.filter_by(id=user_home_link.nha_id).first()
+            if not home:
+                return jsonify({'status': 'error', 'message': 'Không tìm thấy nhà để lưu Adafruit credentials'}), 404
+
+            home.adafruit_username = adafruit_username
+            home.adafruit_key = adafruit_key
+            db.session.add(home)
+
         token = generate_token(user.id)
+
+        db.session.commit()
 
         return jsonify({
             'status': 'success',

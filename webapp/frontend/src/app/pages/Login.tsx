@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Lock, Mail } from "lucide-react";
+import { Lock, Mail, KeyRound, UserRound } from "lucide-react";
 
 interface TeamMember {
   name: string;
@@ -21,6 +21,8 @@ const API_BASE_URL = "http://localhost:5000";
 export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [adafruitUsername, setAdafruitUsername] = useState("");
+  const [adafruitKey, setAdafruitKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -38,6 +40,12 @@ export function Login() {
         return;
       }
 
+      if ((adafruitUsername && !adafruitKey) || (!adafruitUsername && adafruitKey)) {
+        setError("Nếu nhập Adafruit thì phải nhập cả username và API key");
+        setIsLoading(false);
+        return;
+      }
+
       // Call backend login API
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -46,7 +54,9 @@ export function Login() {
         },
         body: JSON.stringify({ 
           email: email.trim(), 
-          password: password 
+          password: password,
+          adafruit_username: adafruitUsername.trim(),
+          adafruit_key: adafruitKey.trim()
         })
       });
 
@@ -128,6 +138,43 @@ export function Login() {
                 className="w-full pl-12 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:bg-white transition-all text-gray-800 placeholder-gray-400"
               />
             </div>
+          </div>
+
+          {/* Adafruit Username */}
+          <div className="mb-6">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Adafruit Username
+            </label>
+            <div className="relative">
+              <UserRound className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={adafruitUsername}
+                onChange={(e) => setAdafruitUsername(e.target.value)}
+                placeholder="Nhập Adafruit IO username"
+                className="w-full pl-12 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:bg-white transition-all text-gray-800 placeholder-gray-400"
+              />
+            </div>
+          </div>
+
+          {/* Adafruit API Key */}
+          <div className="mb-8">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Adafruit API Key
+            </label>
+            <div className="relative">
+              <KeyRound className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="password"
+                value={adafruitKey}
+                onChange={(e) => setAdafruitKey(e.target.value)}
+                placeholder="Nhập Adafruit IO key"
+                className="w-full pl-12 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:bg-white transition-all text-gray-800 placeholder-gray-400"
+              />
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              Có thể để trống nếu đã lưu Adafruit key trước đó.
+            </p>
           </div>
 
           {/* Login Button */}

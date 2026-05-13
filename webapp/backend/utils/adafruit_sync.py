@@ -6,7 +6,22 @@ Handles pulling sensor data from Adafruit feeds and updating database
 import requests
 import os
 from datetime import datetime, timezone
-from models import db, TrangThaiCamBien, LichSuCamBien
+from models import db, TrangThaiCamBien, LichSuCamBien, Nha
+
+
+def get_adafruit_credentials():
+    """Lấy Adafruit credentials từ DB trước, fallback sang biến môi trường."""
+    house = Nha.query.filter(
+        Nha.adafruit_username.isnot(None),
+        Nha.adafruit_key.isnot(None)
+    ).first()
+
+    if house and house.adafruit_username and house.adafruit_key:
+        return house.adafruit_username.strip(), house.adafruit_key.strip(), house.id
+
+    adafruit_user = os.getenv('ADAFRUIT_IO_USER')
+    adafruit_key = os.getenv('ADAFRUIT_IO_KEY')
+    return adafruit_user, adafruit_key, None
 
 
 def sync_sensor_data_from_adafruit():
@@ -18,8 +33,7 @@ def sync_sensor_data_from_adafruit():
         tuple: (success: bool, temp_value: float, humi_value: float, message: str)
     """
     try:
-        adafruit_user = os.getenv('ADAFRUIT_IO_USER')
-        adafruit_key = os.getenv('ADAFRUIT_IO_KEY')
+        adafruit_user, adafruit_key, _ = get_adafruit_credentials()
         group_key = os.getenv('ADAFRUIT_GROUP_KEY', 'yolohome')
         
         if not adafruit_user or not adafruit_key:

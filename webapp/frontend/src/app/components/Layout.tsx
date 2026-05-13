@@ -15,8 +15,8 @@ import { useState } from "react";
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "pastel-sky" },
   { path: "/devices", label: "Devices", icon: Cpu, color: "pastel-mint" },
-  // { path: "/schedule", label: "Schedule", icon: Calendar, color: "pastel-lavender" },
-  // { path: "/settings", label: "Settings", icon: SettingsIcon, color: "pastel-sage" },
+  { path: "/schedule", label: "Schedule", icon: Calendar, color: "pastel-lavender" },
+  { path: "/settings", label: "Settings", icon: SettingsIcon, color: "pastel-sage" },
 ];
 
 export function Layout({ children }: { children?: React.ReactNode }) {
