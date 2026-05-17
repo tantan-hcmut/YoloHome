@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Thermometer, Droplets, Power, Lightbulb, Fan, TrendingUp } from "lucide-react";
+import { Thermometer, Droplets, Power, Lightbulb, Fan} from "lucide-react";
 import { motion } from "motion/react";
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const API_BASE_URL = "http://localhost:5000";
 
@@ -13,16 +13,6 @@ interface SensorData {
   do_am?: number;
   thoi_gian_cap_nhat?: string;
 }
-
-const aiPredictionData = [
-  { time: "Mon", value: 85 },
-  { time: "Tue", value: 78 },
-  { time: "Wed", value: 92 },
-  { time: "Thu", value: 88 },
-  { time: "Fri", value: 95 },
-  { time: "Sat", value: 72 },
-  { time: "Sun", value: 80 },
-];
 
 export function Dashboard() {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
@@ -310,52 +300,6 @@ export function Dashboard() {
             ))}
           </div>
         </motion.div>
-
-        {/* AI Prediction Chart */}
-        {/* <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg"
-        >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">Thông tin chi tiết</h2>
-              <p className="text-sm text-gray-500">Cập nhật tại: {sensorData?.thoi_gian_cap_nhat ? new Date(sensorData.thoi_gian_cap_nhat).toLocaleString('vi-VN') : 'N/A'}</p>
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={aiPredictionData}>
-              <defs>
-                <linearGradient id="colorPrediction" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="time" stroke="#9ca3af" style={{ fontSize: '12px' }} />
-              <YAxis stroke="#9ca3af" style={{ fontSize: '12px' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(99, 102, 241, 0.2)',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                }}
-              />
-              <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorPrediction)" name="Efficiency Score" />
-            </AreaChart>
-          </ResponsiveContainer>
-          <div className="mt-4 p-4 bg-gradient-to-r from-cyan-50 to-purple-50 border border-[#6366f1]/20 rounded-xl">
-            <p className="text-sm text-gray-700">
-              <span className="font-semibold">Thiết bị:</span> YOLO:BIT - Kết nối qua Serial USB, cập nhật dữ liệu mỗi 5 giây.
-            </p>
-          </div>
-        </motion.div> */}
       </div>
     </div>
   );

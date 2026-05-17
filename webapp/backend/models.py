@@ -16,7 +16,6 @@ class NguoiDung(db.Model):
     mat_khau = db.Column(db.String(255), nullable=False)
     ho_va_ten = db.Column(db.String(255), nullable=False)
     vai_tro = db.Column(db.String(50), default='user')
-    du_lieu_khuon_mat = db.Column(db.Text, nullable=True)
     trang_thai_cap_quyen = db.Column(db.Boolean, default=True)
 
     nha_lien_ket = db.relationship('NguoiDungNha', back_populates='nguoi_dung', cascade='all, delete-orphan')
@@ -35,6 +34,44 @@ class NguoiDung(db.Model):
         }
 
 
+class FaceProfile(db.Model):
+    """Khuôn mặt đã đăng ký qua Face++."""
+    __tablename__ = 'face_profiles'
+    __table_args__ = {'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('nguoi_dung.id'), nullable=True, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    face_token = db.Column(db.String(255), nullable=False)
+    faceset_token = db.Column(db.String(255), nullable=True)
+    image_hash = db.Column(db.String(128), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('NguoiDung', backref=db.backref('face_profiles', lazy=True, cascade='all, delete-orphan'))
+
+    def to_public_dict(self):
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'createdAt': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class FaceAuthAudit(db.Model):
+    """Audit đăng nhập/mở khóa bằng khuôn mặt."""
+    __tablename__ = 'face_auth_audit'
+    __table_args__ = {'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('nguoi_dung.id'), nullable=True)
+    face_profile_id = db.Column(db.Integer, db.ForeignKey('face_profiles.id'), nullable=True)
+    action = db.Column(db.String(100), nullable=False)
+    confidence = db.Column(db.Float, nullable=True)
+    success = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Nha(db.Model):
     """Ánh xạ tới bảng 'nha' trong database"""
     __tablename__ = 'nha'
@@ -44,6 +81,7 @@ class Nha(db.Model):
     ten_nha = db.Column(db.String(255), nullable=False)
     adafruit_username = db.Column(db.String(255), nullable=True)
     adafruit_key = db.Column(db.String(255), nullable=True)
+    adafruit_group_key = db.Column(db.String(255), nullable=True)
 
     thiet_bi = db.relationship('ThietBi', backref='nha', lazy=True, cascade='all, delete-orphan')
     nguoi_dung = db.relationship('NguoiDungNha', back_populates='nha', cascade='all, delete-orphan')
@@ -99,6 +137,7 @@ class LichSuHoatDong(db.Model):
     __table_args__ = {'extend_existing': True}
 
     id = db.Column(db.Integer, primary_key=True)
+    nha_id = db.Column(db.String(50), db.ForeignKey('nha.id', ondelete='CASCADE'), nullable=True)
     thiet_bi_id = db.Column(db.String(50), db.ForeignKey('thiet_bi.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('nguoi_dung.id'), nullable=True)
     hanh_dong = db.Column(db.String(255), nullable=False)
@@ -110,6 +149,7 @@ class LichSuHoatDong(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'nha_id': self.nha_id,
             'thiet_bi_id': self.thiet_bi_id,
             'user_id': self.user_id,
             'hanh_dong': self.hanh_dong,
@@ -143,31 +183,29 @@ class NguoiDungNha(db.Model):
 
 
 class LichTrinh(db.Model):
-    """Lịch trình điều khiển thiết bị"""
+    """Bảng lưu trữ lịch trình hẹn giờ thiết bị"""
     __tablename__ = 'lich_trinh'
     __table_args__ = {'extend_existing': True}
 
-    id = db.Column(db.Integer, primary_key=True)
-    nha_id = db.Column(db.String(50), db.ForeignKey('nha.id'), nullable=False)
-    thiet_bi_id = db.Column(db.String(50), db.ForeignKey('thiet_bi.id'), nullable=True)
-    ten_lich_trinh = db.Column(db.String(255), nullable=False)
-    mo_ta = db.Column(db.Text, nullable=True)
-    thoi_gian_bat_dau = db.Column(db.DateTime, nullable=False)
-    thoi_gian_ket_thuc = db.Column(db.DateTime, nullable=True)
-    trang_thai = db.Column(db.String(50), default='inactive')
-    ngay_tao = db.Column(db.DateTime, default=datetime.utcnow)
-
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nha_id = db.Column(db.String(50), db.ForeignKey('nha.id', ondelete='CASCADE'), nullable=True)
+    thiet_bi_id = db.Column(db.String(50), db.ForeignKey('thiet_bi.id', ondelete='CASCADE'), nullable=True)
+    ten_lich_trinh = db.Column(db.String(255), nullable=True) # THÊM DÒNG NÀY
+    thoi_gian_hen = db.Column(db.Time, nullable=False)
+    ngay_trong_tuan = db.Column(db.String(100), nullable=True)
+    trang_thai_thiet_bi_muon_dat = db.Column(db.String(50), nullable=True)
+    trang_thai_kich_hoat = db.Column(db.Boolean, default=True)
+    
     def to_dict(self):
         return {
             'id': self.id,
             'nha_id': self.nha_id,
             'thiet_bi_id': self.thiet_bi_id,
             'ten_lich_trinh': self.ten_lich_trinh,
-            'mo_ta': self.mo_ta,
-            'thoi_gian_bat_dau': self.thoi_gian_bat_dau.isoformat() if self.thoi_gian_bat_dau else None,
-            'thoi_gian_ket_thuc': self.thoi_gian_ket_thuc.isoformat() if self.thoi_gian_ket_thuc else None,
-            'trang_thai': self.trang_thai,
-            'ngay_tao': self.ngay_tao.isoformat() if self.ngay_tao else None
+            'thoi_gian_hen': self.thoi_gian_hen.isoformat() if self.thoi_gian_hen else None,
+            'ngay_trong_tuan': self.ngay_trong_tuan,
+            'trang_thai_thiet_bi_muon_dat': self.trang_thai_thiet_bi_muon_dat,
+            'trang_thai_kich_hoat': self.trang_thai_kich_hoat
         }
 
 

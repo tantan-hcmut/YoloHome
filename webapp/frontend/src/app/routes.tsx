@@ -5,6 +5,8 @@ import { Dashboard } from "./pages/Dashboard";
 import { Devices } from "./pages/Devices";
 import { Schedule } from "./pages/Schedule";
 import { Settings } from "./pages/Settings";
+import { History } from "./pages/History";
+import { FaceManagement } from "./pages/FaceManagement";
 
 // Root route - check auth and redirect
 const RootRoute = () => {
@@ -65,8 +67,10 @@ export const router = createBrowserRouter([
     children: [
       { path: "/dashboard", Component: Dashboard },
       { path: "/devices", Component: Devices },
+      { path: "/faces", Component: FaceManagement },
       { path: "/schedule", Component: Schedule },
       { path: "/settings", Component: Settings },
+      { path: "/history", Component: History },
     ],
   },
 ]);

@@ -9,21 +9,6 @@ from datetime import datetime, timezone
 from models import db, TrangThaiCamBien, LichSuCamBien, Nha
 
 
-def get_adafruit_credentials():
-    """Lấy Adafruit credentials từ DB trước, fallback sang biến môi trường."""
-    house = Nha.query.filter(
-        Nha.adafruit_username.isnot(None),
-        Nha.adafruit_key.isnot(None)
-    ).first()
-
-    if house and house.adafruit_username and house.adafruit_key:
-        return house.adafruit_username.strip(), house.adafruit_key.strip(), house.id
-
-    adafruit_user = os.getenv('ADAFRUIT_IO_USER')
-    adafruit_key = os.getenv('ADAFRUIT_IO_KEY')
-    return adafruit_user, adafruit_key, None
-
-
 def sync_sensor_data_from_adafruit():
     """
     Poll Adafruit feeds (yolohome.yolohome-temp, yolohome.yolohome-humi)
@@ -33,10 +18,19 @@ def sync_sensor_data_from_adafruit():
         tuple: (success: bool, temp_value: float, humi_value: float, message: str)
     """
     try:
-        adafruit_user, adafruit_key, _ = get_adafruit_credentials()
-        group_key = os.getenv('ADAFRUIT_GROUP_KEY', 'yolohome')
+        house = Nha.query.filter(
+            Nha.adafruit_username.isnot(None),
+            Nha.adafruit_key.isnot(None)
+        ).first()
+
+        if not house or not house.adafruit_username or not house.adafruit_key or not house.adafruit_group_key:
+            return False, None, None, "Chưa cấu hình Adafruit credentials trong bảng Nha ở Database"
         
-        if not adafruit_user or not adafruit_key:
+        adafruit_user = house.adafruit_username.strip()
+        adafruit_key = house.adafruit_key.strip()        
+        adafruit_group_key = house.adafruit_group_key.strip()
+        
+        if not adafruit_user or not adafruit_key or not adafruit_group_key:
             return False, None, None, "Adafruit credentials not configured"
         
         headers = {
@@ -45,11 +39,11 @@ def sync_sensor_data_from_adafruit():
         }
         
         # Fetch temperature data
-        temp_url = f'https://io.adafruit.com/api/v2/{adafruit_user}/feeds/{group_key}.yolohome-temp/data/last'
+        temp_url = f'https://io.adafruit.com/api/v2/{adafruit_user}/feeds/{adafruit_group_key}.yolohome-temp/data/last'
         temp_response = requests.get(temp_url, headers=headers, timeout=5)
         
         # Fetch humidity data
-        humi_url = f'https://io.adafruit.com/api/v2/{adafruit_user}/feeds/{group_key}.yolohome-humi/data/last'
+        humi_url = f'https://io.adafruit.com/api/v2/{adafruit_user}/feeds/{adafruit_group_key}.yolohome-humi/data/last'
         humi_response = requests.get(humi_url, headers=headers, timeout=5)
         
         print(f"[DEBUG] Temp status: {temp_response.status_code}, Humi status: {humi_response.status_code}")

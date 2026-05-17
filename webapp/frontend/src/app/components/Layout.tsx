@@ -2,21 +2,25 @@ import { Outlet, NavLink, useNavigate } from "react-router";
 import { 
   LayoutDashboard, 
   Cpu, 
-  Calendar,
   Home as HomeIcon, 
-  Settings as SettingsIcon,
   Menu,
   LogOut,
   Mic,
-  MicOff
+  MicOff,
+  ScanFace,
+  SettingsIcon,
+  Calendar,
+  HistoryIcon
 } from "lucide-react";
 import { useState } from "react";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, color: "pastel-sky" },
   { path: "/devices", label: "Devices", icon: Cpu, color: "pastel-mint" },
+  { path: "/faces", label: "FaceID", icon: ScanFace, color: "pastel-lavender" },
   { path: "/schedule", label: "Schedule", icon: Calendar, color: "pastel-lavender" },
   { path: "/settings", label: "Settings", icon: SettingsIcon, color: "pastel-sage" },
+  { path: "/history", label: "History", icon: HistoryIcon, color: "pastel-amber" },
 ];
 
 export function Layout({ children }: { children?: React.ReactNode }) {
@@ -100,7 +104,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           {/* Log Out */}
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-red-100/50 hover:text-red-600 transition-all mt-4"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-red-100/50 hover:text-red-600 cursor-pointer transition-all mt-4"
           >
             <LogOut className="w-5 h-5" />
             <span className="text-sm font-medium">Log Out</span>
