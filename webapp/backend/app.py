@@ -1,8 +1,9 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timezone
 
@@ -48,6 +49,110 @@ app.register_blueprint(history_bp)
 # Đăng ký webhook Adafruit
 from routes.adafruit_webhook import webhook_bp
 app.register_blueprint(webhook_bp)
+
+
+# ==========================================
+# API VOICE COMMAND (ĐÃ MERGE TỪ CODE CỦA BẠN CẬU)
+# ==========================================
+
+@app.route('/api/voice-command', methods=['POST'])
+def receive_voice_command():
+    from models import db, VoiceCommand, ThietBi, TrangThaiThietBi, LichSuHoatDong
+    from routes.devices import send_command_to_adafruit
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Không có dữ liệu gửi lên'}), 400
+
+        # 1. Lưu lệnh vào DB (Bảng VoiceCommand của bạn cậu)
+        command = VoiceCommand(
+            action=data.get('action', ''),
+            device=data.get('device', ''),
+            room=data.get('room', ''),
+            speed=str(data.get('speed', '')) if data.get('speed') else None,
+            color=str(data.get('color', '')) if data.get('color') else None,
+            original_text=data.get('original_text', ''),
+            command_json=json.dumps(data)
+        )
+        db.session.add(command)
+        db.session.commit()
+
+        # 2. Thực thi lệnh thực tế (Kết nối với luồng điều khiển của cậu)
+        action = data.get('action')
+        device_type = 'den' if data.get('device') == 'light' else 'quat' if data.get('device') == 'fan' else None
+
+        if not action or not device_type:
+            return jsonify({'message': 'Lưu lệnh thành công, nhưng không đủ thông tin để bật/tắt', 'id': command.id}), 200
+
+        # Tìm thiết bị đầu tiên khớp loại trong nhà
+        device = ThietBi.query.filter_by(loai_thiet_bi=device_type).first()
+        if not device:
+            return jsonify({'message': 'Lệnh lưu thành công, nhưng không tìm thấy thiết bị phù hợp', 'id': command.id}), 404
+
+        # Gửi lệnh xuống Adafruit
+        cmd_payload = {'action': 'on' if action in ['on', 'set_color', 'set_speed'] else 'off', 'source': 'voice'}
+        if device_type == 'den':
+            cmd_payload['action'] = 'light_on' if cmd_payload['action'] == 'on' else 'light_off'
+        else:
+            cmd_payload['action'] = 'fan_on' if cmd_payload['action'] == 'on' else 'fan_off'
+            
+        send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
+
+        # Cập nhật trạng thái và ghi log Lịch sử hoạt động
+        state = TrangThaiThietBi.query.filter_by(thiet_bi_id=device.id).first()
+        if state:
+            state.trang_thai_bat_tat = (cmd_payload['action'] in ['light_on', 'fan_on'])
+        
+        new_history = LichSuHoatDong(
+            nha_id=device.nha_id,
+            thiet_bi_id=device.id,
+            user_id=None,
+            hanh_dong=f"Voice Command: {data.get('original_text')}",
+            thong_so_thay_doi=action
+        )
+        db.session.add(new_history)
+
+        # Đánh dấu lệnh Voice đã được xử lý xong
+        command.status = 'processed'
+        command.processed_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': 'Đã xử lý lệnh giọng nói thành công', 'id': command.id}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/voice-commands/pending', methods=['GET'])
+def get_pending_commands():
+    from models import VoiceCommand
+    try:
+        commands = VoiceCommand.query.filter_by(status='pending').all()
+        return jsonify({
+            "data": [cmd.to_dict() for cmd in commands],
+            "count": len(commands)
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/voice-commands/<int:command_id>/processed', methods=['POST'])
+def mark_command_processed(command_id):
+    from models import VoiceCommand
+    try:
+        command = VoiceCommand.query.get(command_id)
+        if not command:
+            return jsonify({"error": "Không tìm thấy lệnh"}), 404
+        
+        command.status = 'processed'
+        command.processed_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({"success": True, "message": "Đã đánh dấu xử lý xong"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
 
 # ==========================================
 # Background Task: Auto-sync từ Adafruit mỗi 30s
@@ -153,6 +258,7 @@ def check_and_execute_schedules_background():
 
 # Initialize APScheduler
 scheduler = BackgroundScheduler()
+# Chạy Hẹn giờ (Mỗi 10 giây)
 scheduler.add_job(
     func=check_and_execute_schedules_background,
     trigger="interval",
@@ -161,8 +267,19 @@ scheduler.add_job(
     name="Check schedules every 10s",
     replace_existing=True
 )
+
+# Đồng bộ cảm biến từ Adafruit (Mỗi 30 giây)
+scheduler.add_job(
+    func=sync_sensor_from_adafruit_background,
+    trigger="interval",
+    seconds=30,
+    id="sync_adafruit_sensors",
+    name="Sync sensors from Adafruit every 30s",
+    replace_existing=True
+)
+
 scheduler.start()
-print("[Scheduler] Background sync task started (every 10s)")
+print("[Scheduler] Background jobs started (Schedules: 10s, Sensors: 30s)")
 
 with app.app_context():
     db.create_all()

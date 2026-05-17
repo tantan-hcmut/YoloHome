@@ -72,7 +72,7 @@ def get_all_thiet_bi():
             
             for tb_id, feed_name in feeds_to_check.items():
                 url = f'https://io.adafruit.com/api/v2/{user}/feeds/{feed_name}/data/last'
-                res = requests.get(url, headers=headers, timeout=2) # Timeout 2s để không làm chậm web
+                res = requests.get(url, headers=headers, timeout=5) # Timeout 5s để không làm chậm web
                 
                 if res.status_code == 200:
                     val_str = str(res.json().get('value', '')).strip().lower()

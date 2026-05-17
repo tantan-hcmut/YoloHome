@@ -36,7 +36,7 @@ export function Devices() {
   useEffect(() => {
     fetchDevices();
     // Polling every 5 seconds
-    const interval = setInterval(fetchDevices, 5000);
+    const interval = setInterval(fetchDevices, 10000);
     return () => clearInterval(interval);
   }, []);
 

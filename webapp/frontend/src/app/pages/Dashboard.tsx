@@ -156,8 +156,6 @@ export function Dashboard() {
       name: "Living Room", 
       temp: sensorData?.nhiet_do || 0, 
       humidity: sensorData?.do_am || 0, 
-      devices: 3, 
-      active: 2 
     },
   ];
   return (
@@ -276,9 +274,6 @@ export function Dashboard() {
               <div key={room.name} className="bg-gradient-to-br from-cyan-50 to-purple-50 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-gray-800">{room.name}</h3>
-                  <span className="text-xs font-semibold px-2 py-1 bg-white/80 text-gray-600 rounded-lg">
-                    {room.active}/{room.devices} Active
-                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex items-center gap-2">

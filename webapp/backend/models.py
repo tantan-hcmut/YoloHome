@@ -247,6 +247,36 @@ class LichSuCamBien(db.Model):
             'thoi_gian_ghi_nhan': self.thoi_gian_ghi_nhan.isoformat() if self.thoi_gian_ghi_nhan else None
         }
 
+class VoiceCommand(db.Model):
+    """Lệnh điều khiển bằng giọng nói"""
+    __tablename__ = 'voice_commands'
+    __table_args__ = {'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    action = db.Column(db.String(50), nullable=False)
+    device = db.Column(db.String(50), nullable=False)
+    room = db.Column(db.String(50), nullable=True)
+    speed = db.Column(db.String(50), nullable=True)
+    color = db.Column(db.String(50), nullable=True)
+    original_text = db.Column(db.Text, nullable=False)
+    command_json = db.Column(db.Text, nullable=True)  # JSON string của lệnh đầy đủ
+    status = db.Column(db.String(20), default='pending')  # pending, processed, sent_to_hardware
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    processed_at = db.Column(db.DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'action': self.action,
+            'device': self.device,
+            'room': self.room,
+            'speed': self.speed,
+            'color': self.color,
+            'original_text': self.original_text,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'processed_at': self.processed_at.isoformat() if self.processed_at else None
+        }
 
 class AdafruitFeedMapping(db.Model):
     """Mapping giữa Adafruit feed_key và thiết bị trong hệ thống"""
@@ -255,7 +285,7 @@ class AdafruitFeedMapping(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     feed_key = db.Column(db.String(100), unique=True, nullable=False)  # yolohome-temp, yolohome-light, etc
-    thiet_bi_id = db.Column(db.String(50), db.ForeignKey('thiet_bi.id'), nullable=False)
+    thiet_bi_id = db.Column(db.String(50), db.ForeignKey('thiet_bi.id', ondelete='CASCADE'), nullable=False)
     sensor_type = db.Column(db.String(50), nullable=True)  # 'temperature', 'humidity', 'light', 'fan'
     config = db.Column(db.JSON, default={})  # Additional config like min/max values
 
@@ -272,5 +302,3 @@ class AdafruitFeedMapping(db.Model):
             'sensor_type': self.sensor_type,
             'config': self.config
         }
-
-
