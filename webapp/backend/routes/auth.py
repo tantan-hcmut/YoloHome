@@ -156,3 +156,52 @@ def get_current_user():
         return jsonify({'status': 'success', 'data': user.to_dict()}), 200
     except Exception as exc:
         return jsonify({'status': 'error', 'message': f'Lỗi server: {str(exc)}'}), 500
+
+@auth_bp.route('/me', methods=['PUT'])
+def update_current_user():
+    """Cập nhật họ và tên, email của người dùng hiện tại"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'status': 'error', 'message': 'Missing authorization header'}), 401
+
+        parts = auth_header.split(' ')
+        if len(parts) != 2 or parts[0].lower() != 'bearer':
+            return jsonify({'status': 'error', 'message': 'Invalid token format'}), 401
+
+        payload = verify_token(parts[1])
+        if not payload:
+            return jsonify({'status': 'error', 'message': 'Token invalid hoặc hết hạn'}), 401
+
+        user = NguoiDung.query.get(payload['user_id'])
+        if not user:
+            return jsonify({'status': 'error', 'message': 'User not found'}), 404
+
+        data = request.get_json() or {}
+        email = data.get('email')
+        ho_va_ten = data.get('ho_va_ten')
+
+        if not email or not ho_va_ten:
+            return jsonify({'status': 'error', 'message': 'Họ và tên và email không được bỏ trống'}), 400
+
+        email_normalized = normalize_email(email)
+        
+        # Kiểm tra trùng lặp nếu người dùng muốn đổi sang một email khác hoàn toàn
+        if email_normalized != user.email:
+            existing_user = NguoiDung.query.filter_by(email=email_normalized).first()
+            if existing_user:
+                return jsonify({'status': 'error', 'message': 'Email này đã được sử dụng bởi tài khoản khác'}), 400
+            user.email = email_normalized
+
+        user.ho_va_ten = ho_va_ten.strip()
+        
+        db.session.commit()
+        return jsonify({
+            'status': 'success', 
+            'message': 'Cập nhật thông tin thành công', 
+            'data': user.to_dict()
+        }), 200
+        
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': f'Lỗi server: {str(exc)}'}), 500

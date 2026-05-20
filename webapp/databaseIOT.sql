@@ -1,4 +1,3 @@
-DROP TABLE IF EXISTS lich_su_tieu_thu_dien CASCADE;
 DROP TABLE IF EXISTS lich_su_cam_bien CASCADE;
 DROP TABLE IF EXISTS trang_thai_cam_bien CASCADE;
 DROP TABLE IF EXISTS lich_su_hoat_dong CASCADE;
@@ -19,7 +18,6 @@ CREATE TABLE nguoi_dung (
     mat_khau VARCHAR(255) NOT NULL,
     ho_va_ten VARCHAR(255) NOT NULL,
     vai_tro VARCHAR(50) DEFAULT 'user',
-    du_lieu_khuon_mat TEXT,
     trang_thai_cap_quyen BOOLEAN DEFAULT TRUE
 );
 
@@ -49,7 +47,8 @@ CREATE TABLE nha (
     id VARCHAR(50) PRIMARY KEY,
     ten_nha VARCHAR(255) NOT NULL,
     adafruit_username VARCHAR(255),
-    adafruit_key VARCHAR(255)
+    adafruit_key VARCHAR(255),
+    adafruit_group_key VARCHAR(255)
 );
 
 CREATE TABLE nguoi_dung_nha (
@@ -87,7 +86,9 @@ CREATE INDEX idx_feed_key ON adafruit_feed_mapping(feed_key);
 
 CREATE TABLE lich_trinh (
     id SERIAL PRIMARY KEY,
+    nha_id VARCHAR(50) REFERENCES nha(id) ON DELETE CASCADE,
     thiet_bi_id VARCHAR(50) REFERENCES thiet_bi(id) ON DELETE CASCADE,
+    ten_lich_trinh VARCHAR(255) NOT NULL,
     thoi_gian_hen TIME NOT NULL,
     ngay_trong_tuan VARCHAR(100),
     trang_thai_thiet_bi_muon_dat VARCHAR(50),
@@ -96,6 +97,7 @@ CREATE TABLE lich_trinh (
 
 CREATE TABLE lich_su_hoat_dong (
     id SERIAL PRIMARY KEY,
+    nha_id VARCHAR(50) REFERENCES nha(id) ON DELETE CASCADE,
     thiet_bi_id VARCHAR(50) REFERENCES thiet_bi(id) ON DELETE CASCADE,
     user_id INT REFERENCES nguoi_dung(id) ON DELETE SET NULL,
     hanh_dong VARCHAR(255) NOT NULL,
@@ -120,16 +122,6 @@ CREATE TABLE lich_su_cam_bien (
 CREATE INDEX idx_cam_bien_thoi_gian ON lich_su_cam_bien(thoi_gian_ghi_nhan);
 CREATE INDEX idx_cam_bien_thiet_bi ON lich_su_cam_bien(thiet_bi_id);
 
-CREATE TABLE lich_su_tieu_thu_dien (
-    id SERIAL PRIMARY KEY,
-    thiet_bi_id VARCHAR(50) REFERENCES thiet_bi(id) ON DELETE CASCADE,
-    dien_nang_tieu_thu FLOAT NOT NULL, 
-    thoi_gian_ghi_nhan TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
-);
-CREATE INDEX idx_tieu_thu_thiet_bi ON lich_su_tieu_thu_dien(thiet_bi_id);
-CREATE INDEX idx_tieu_thu_thoi_gian ON lich_su_tieu_thu_dien(thoi_gian_ghi_nhan);
-
-
 -- ==========================================================
 -- THÊM DỮ LIỆU MẪU ĐỂ TEST
 -- ==========================================================
@@ -137,8 +129,8 @@ CREATE INDEX idx_tieu_thu_thoi_gian ON lich_su_tieu_thu_dien(thoi_gian_ghi_nhan)
 INSERT INTO nguoi_dung (email, mat_khau, ho_va_ten, vai_tro) 
 VALUES ('admin@hcmut.edu.vn', 'HK252@', 'Admin YoloHome', 'chu_nha');
 
-INSERT INTO nha (id, ten_nha, adafruit_username, adafruit_key) 
-VALUES ('HOME_001', 'Nhà thông minh HCMUT', 'yolo_student', 'aio_key_123456789');
+INSERT INTO nha (id, ten_nha, adafruit_username, adafruit_key, adafruit_group_key) 
+VALUES ('HOME_001', 'Nhà thông minh HCMUT', null, null, null);
 
 INSERT INTO nguoi_dung_nha (user_id, nha_id, vai_tro_trong_nha) 
 VALUES (1, 'HOME_001', 'chu_nha');

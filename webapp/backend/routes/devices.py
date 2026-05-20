@@ -52,6 +52,58 @@ def create_thiet_bi():
 @devices_bp.route('', methods=['GET'])
 @require_auth
 def get_all_thiet_bi():
+    try:
+        house = Nha.query.filter(
+            Nha.adafruit_username.isnot(None), 
+            Nha.adafruit_key.isnot(None)
+        ).first()
+        
+        if house:
+            user = house.adafruit_username.strip()
+            key = house.adafruit_key.strip()
+            group = house.adafruit_group_key.strip() if house.adafruit_group_key else 'yolohome'
+            headers = {'X-AIO-Key': key, 'Content-Type': 'application/json'}
+            
+            # Khai báo các Feed cần kiểm tra (Đèn và Quạt)
+            feeds_to_check = {
+                'DEN_001': f'{group}.yolohome-light',
+                'QUAT_001': f'{group}.yolohome-fan'
+            }
+            
+            for tb_id, feed_name in feeds_to_check.items():
+                url = f'https://io.adafruit.com/api/v2/{user}/feeds/{feed_name}/data/last'
+                res = requests.get(url, headers=headers, timeout=5) # Timeout 5s để không làm chậm web
+                
+                if res.status_code == 200:
+                    val_str = str(res.json().get('value', '')).strip().lower()
+                    is_on = None
+                    
+                    # Phân tích giá trị trả về từ Adafruit (chuỗi thường hoặc JSON)
+                    if val_str in ['on', '1', 'true', 'light_on', 'fan_on']: 
+                        is_on = True
+                    elif val_str in ['off', '0', 'false', 'light_off', 'fan_off']: 
+                        is_on = False
+                    else:
+                        try:
+                            # Nếu board ESP32 đẩy lên nguyên cục JSON
+                            import json
+                            data = json.loads(val_str)
+                            action = data.get('action', '')
+                            if action in ['light_on', 'fan_on', 'on']: is_on = True
+                            if action in ['light_off', 'fan_off', 'off']: is_on = False
+                        except:
+                            pass
+                    
+                    # Nếu phân tích thành công, lưu trạng thái thực tế vào DB
+                    if is_on is not None:
+                        state = TrangThaiThietBi.query.filter_by(thiet_bi_id=tb_id).first()
+                        if state:
+                            state.trang_thai_bat_tat = is_on
+
+            db.session.commit()
+    except Exception as e:
+        print(f"[Sync] Lỗi đồng bộ trạng thái thiết bị từ Adafruit: {e}")
+        
     objs = ThietBi.query.all()
     return jsonify([{
         'id': x.id,
@@ -183,10 +235,22 @@ def control_thiet_bi(thiet_bi_id):
                 state.toc_do = payload.get('speed', 50)
                 state.trang_thai_bat_tat = True  # Assume fan turns on
             
-            # Ghi lịch sử
+            # Ghi lịch sử với ID người dùng thực tế
+            current_user_id = None
+            auth_header = request.headers.get('Authorization')
+            if auth_header and auth_header.startswith('Bearer '):
+                token = auth_header.split(' ')[1]
+                try:
+                    import jwt
+                    decoded = jwt.decode(token, options={"verify_signature": False})
+                    current_user_id = decoded.get('id') or decoded.get('user_id') or decoded.get('sub')
+                except Exception as e:
+                    print("Lỗi giải mã token:", e)
+            
             log = LichSuHoatDong(
+                nha_id=device.nha_id,
                 thiet_bi_id=thiet_bi_id,
-                user_id=None,
+                user_id=current_user_id,
                 hanh_dong=f'Điều khiển thiết bị: {action}',
                 thong_so_thay_doi=json.dumps(payload)
             )
@@ -220,15 +284,28 @@ def send_command_to_adafruit(command, device_type='den'):
     yolohome-light & yolohome-fan chỉ là OUTPUT feeds (board publish status)
     """
     try:
-        adafruit_user = os.getenv('ADAFRUIT_IO_USER')
-        adafruit_key = os.getenv('ADAFRUIT_IO_KEY')
-        group_key = os.getenv('ADAFRUIT_GROUP_KEY', 'yolohome')  # Default group key
+        house = Nha.query.filter(
+            Nha.adafruit_username.isnot(None),
+            Nha.adafruit_key.isnot(None)
+        ).first()
+
+        if not house or not house.adafruit_username or not house.adafruit_key or not house.adafruit_group_key:
+            print("[ERROR] Credentials missing in DB!")
+            return {
+                'success': False,
+                'message': 'Chưa cấu hình Adafruit IO credentials trong bảng Nha'
+            }
+        
+        adafruit_user = house.adafruit_username.strip()
+        adafruit_key = house.adafruit_key.strip()
+        
+        adafruit_group_key = house.adafruit_group_key.strip() if house.adafruit_group_key else 'yolohome'
         
         print(f"[DEBUG] Adafruit User: {adafruit_user}")
-        print(f"[DEBUG] Adafruit Group: {group_key}")
+        print(f"[DEBUG] Adafruit Group: {adafruit_group_key}")
         print(f"[DEBUG] Command: {command}")
         
-        if not adafruit_user or not adafruit_key:
+        if not adafruit_user or not adafruit_key or not adafruit_group_key:
             print("[ERROR] Credentials missing!")
             return {
                 'success': False,
@@ -236,7 +313,7 @@ def send_command_to_adafruit(command, device_type='den'):
             }
         
         # Tất cả commands gửi tới yolohome-command feed
-        feed_key = f'{group_key}.yolohome-command'
+        feed_key = f'{adafruit_group_key}.yolohome-command'
         
         # URL: POST /api/v2/{username}/feeds/{feed}/data
         url = f'https://io.adafruit.com/api/v2/{adafruit_user}/feeds/{feed_key}/data'

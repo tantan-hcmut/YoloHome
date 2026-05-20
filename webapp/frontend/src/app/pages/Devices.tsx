@@ -36,14 +36,14 @@ export function Devices() {
   useEffect(() => {
     fetchDevices();
     // Polling every 5 seconds
-    const interval = setInterval(fetchDevices, 5000);
+    const interval = setInterval(fetchDevices, 10000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchDevices = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE}/cam-bien/devices`, {
+      const response = await fetch(`${API_BASE}/thiet-bi`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -51,7 +51,8 @@ export function Devices() {
 
       if (response.ok) {
         const data = await response.json();
-        setDevices(data.data || []);
+        const devicesList = Array.isArray(data) ? data : (data.data || []);
+        setDevices(devicesList);
       }
       setLoading(false);
     } catch (error) {

@@ -8,4 +8,3 @@ __pycache__/
 webapp/backend/BEDADN/
 webapp/backend/instance/
 webapp/frontend/node_modules/
-webapp/frontend/dist/

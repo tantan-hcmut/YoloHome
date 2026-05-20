@@ -21,7 +21,7 @@ export const stepLabels: Record<FaceChallengeStep, string> = {
   DOWN: "Cúi mặt xuống",
 };
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
   const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
