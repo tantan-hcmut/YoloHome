@@ -111,16 +111,44 @@ def match_registered_face(face_token, profiles):
 
 
 def create_or_get_faceset():
-    return None
+    outer_id = os.getenv('FACEPP_FACESET_OUTER_ID', 'yolohome_faces')
+
+    try:
+        body = _post_facepp('faceset/create', data={
+            'outer_id': outer_id,
+            'display_name': 'YoloHome Faces',
+            'force_merge': 1
+        })
+        return body.get('faceset_token'), outer_id
+    except FaceServiceError as exc:
+        # Nếu FaceSet đã tồn tại thì dùng outer_id luôn
+        if 'EXIST' in str(exc.message).upper() or 'exists' in str(exc.message).lower():
+            return None, outer_id
+        raise
 
 
 def add_face_to_faceset(face_token):
-    return None
+    _, outer_id = create_or_get_faceset()
+    body = _post_facepp('faceset/addface', data={
+        'outer_id': outer_id,
+        'face_tokens': face_token
+    })
+    return body
 
 
 def remove_face_from_faceset(face_token):
-    return None
+    outer_id = os.getenv('FACEPP_FACESET_OUTER_ID', 'yolohome_faces')
+    return _post_facepp('faceset/removeface', data={
+        'outer_id': outer_id,
+        'face_tokens': face_token
+    })
 
 
-def search_face(face_token_or_image):
-    return None
+def search_face(face_token):
+    outer_id = os.getenv('FACEPP_FACESET_OUTER_ID', 'yolohome_faces')
+    body = _post_facepp('search', data={
+        'outer_id': outer_id,
+        'face_token': face_token,
+        'return_result_count': 1
+    })
+    return body

@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 
 from models import FaceProfile, db
 from services.face_challenge_service import create_challenge
-from services.facepp_service import FaceServiceError, detect_face
+from services.facepp_service import FaceServiceError, add_face_to_faceset, detect_face, remove_face_from_faceset
 from utils.security import require_auth
 
 
@@ -51,6 +51,8 @@ def create_face():
 
     try:
         face, image_hash = detect_face(image_data)
+        add_face_to_faceset(face['face_token'])
+
         profile = FaceProfile(
             user_id=request.user_id,
             name=name,
@@ -78,6 +80,11 @@ def delete_face(face_id):
     profile = FaceProfile.query.filter_by(id=face_id, user_id=request.user_id).first()
     if not profile:
         return _error('FACE_NOT_FOUND', 'Không tìm thấy khuôn mặt.', 404)
+
+    try:
+        remove_face_from_faceset(profile.face_token)
+    except FaceServiceError:
+        pass
 
     db.session.delete(profile)
     db.session.commit()
