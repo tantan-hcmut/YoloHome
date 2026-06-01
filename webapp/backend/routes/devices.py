@@ -200,7 +200,7 @@ def control_thiet_bi(thiet_bi_id):
     
     Body:
     {
-        "action": "on|off|set_rgb|set_speed",
+        "action": "on|off|auto|set_rgb|set_speed",
         "brightness": 96,        [optional, for light RGB 0-255]
         "r": 255, "g": 255, "b": 255,  [optional, for light RGB]
         "speed": 50              [optional, for fan speed 0-100]
@@ -230,6 +230,9 @@ def control_thiet_bi(thiet_bi_id):
             
         elif action == 'off':
             command['action'] = 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off'
+
+        elif action in ['auto', 'fan_auto'] and device.loai_thiet_bi == 'quat':
+            command['action'] = 'fan_auto'
             
         elif action == 'set_rgb' and device.loai_thiet_bi == 'den':
             r = payload.get('r', payload.get('LightR', 255))
@@ -258,6 +261,10 @@ def control_thiet_bi(thiet_bi_id):
                 state.trang_thai_bat_tat = True
             elif action in ['off', 'light_off', 'fan_off']:
                 state.trang_thai_bat_tat = False
+            elif action in ['auto', 'fan_auto']:
+                # AUTO returns control to the board AI. Keep the latest on/off
+                # state until the board publishes its next runtime state.
+                pass
             elif action == 'set_rgb':
                 state.mau_sac = json.dumps({
                     'r': payload.get('r', payload.get('LightR', 255)),
@@ -303,6 +310,136 @@ def control_thiet_bi(thiet_bi_id):
             }
         }), 200
         
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@devices_bp.route('/control-all', methods=['POST'])
+@require_auth
+def control_all_thiet_bi():
+    try:
+        payload = request.get_json() or {}
+        action = payload.get('action')
+
+        if action != 'off':
+            return jsonify({'status': 'error', 'message': 'Action khong hop le'}), 400
+
+        devices = ThietBi.query.filter(ThietBi.loai_thiet_bi.in_(['den', 'quat'])).all()
+        updated_devices = []
+        current_user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            try:
+                import jwt
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                current_user_id = decoded.get('id') or decoded.get('user_id') or decoded.get('sub')
+            except Exception as e:
+                print("Loi giai ma token:", e)
+
+        for device in devices:
+            command = {
+                'action': 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off',
+                'source': 'webapp'
+            }
+            response = send_command_to_adafruit(command, device.loai_thiet_bi)
+            if not response['success']:
+                db.session.rollback()
+                return jsonify({'status': 'error', 'message': response['message']}), 500
+
+            state = get_or_create_device_state(device.id)
+            state.trang_thai_bat_tat = False
+            if device.loai_thiet_bi == 'quat':
+                state.toc_do = 0
+
+            log = LichSuHoatDong(
+                nha_id=device.nha_id,
+                thiet_bi_id=device.id,
+                user_id=current_user_id,
+                hanh_dong='Tat toan bo thiet bi',
+                thong_so_thay_doi=json.dumps({'action': 'off'})
+            )
+            db.session.add(log)
+            updated_devices.append({
+                'id': device.id,
+                'trang_thai': state.to_dict()
+            })
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Da tat toan bo thiet bi',
+            'data': updated_devices
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@devices_bp.route('/defaults', methods=['POST'])
+@require_auth
+def apply_default_device_settings():
+    try:
+        devices = ThietBi.query.filter(ThietBi.loai_thiet_bi.in_(['den', 'quat'])).all()
+        updated_devices = []
+        current_user_id = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            try:
+                import jwt
+                decoded = jwt.decode(token, options={"verify_signature": False})
+                current_user_id = decoded.get('id') or decoded.get('user_id') or decoded.get('sub')
+            except Exception as e:
+                print("Loi giai ma token:", e)
+
+        for device in devices:
+            state = get_or_create_device_state(device.id)
+
+            if device.loai_thiet_bi == 'den':
+                state.mau_sac = json.dumps({
+                    'r': 255,
+                    'g': 255,
+                    'b': 255,
+                    'brightness': 50
+                }, ensure_ascii=False, separators=(',', ':'))
+            elif device.loai_thiet_bi == 'quat':
+                state.toc_do = 50
+                response = send_command_to_adafruit({
+                    'action': 'fan_auto',
+                    'source': 'webapp'
+                }, device.loai_thiet_bi)
+                if not response['success']:
+                    db.session.rollback()
+                    return jsonify({'status': 'error', 'message': response['message']}), 500
+
+            log = LichSuHoatDong(
+                nha_id=device.nha_id,
+                thiet_bi_id=device.id,
+                user_id=current_user_id,
+                hanh_dong='Cai dat mac dinh thiet bi',
+                thong_so_thay_doi=json.dumps({
+                    'light': {'r': 255, 'g': 255, 'b': 255, 'brightness': 50},
+                    'fan': {'mode': 'auto', 'speed': 50}
+                })
+            )
+            db.session.add(log)
+            updated_devices.append({
+                'id': device.id,
+                'trang_thai': state.to_dict()
+            })
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Da ap dung cai dat mac dinh',
+            'data': updated_devices
+        }), 200
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500

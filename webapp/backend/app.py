@@ -624,9 +624,11 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(
     func=check_and_execute_schedules_background,
     trigger="interval",
-    seconds=3,
+    seconds=1,
     id="execute_schedules",
-    name="Check schedules every 3s",
+    name="Check schedules every 1s",
+    coalesce=True,
+    max_instances=1,
     replace_existing=True
 )
 
@@ -641,7 +643,7 @@ scheduler.add_job(
 )
 
 scheduler.start()
-print("[Scheduler] Background jobs started (Schedules: 3s, Sensors: 30s)")
+print("[Scheduler] Background jobs started (Schedules: 1s, Sensors: 30s)")
 
 with app.app_context():
     db.create_all()

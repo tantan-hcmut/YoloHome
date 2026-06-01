@@ -1,4 +1,4 @@
-import { Lightbulb, Fan, Loader } from "lucide-react";
+import { Lightbulb, Fan, Loader, PowerOff, RotateCcw, Settings } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect, useRef } from "react";
 
@@ -125,9 +125,70 @@ export function Devices() {
 
   const handleControl = async (
     deviceId: string,
-    action: "on" | "off" | "set_rgb" | "set_speed",
+    action: "on" | "off" | "auto" | "set_rgb" | "set_speed",
     additionalData?: any
   ) => {
+    const previousDevices = devices;
+    if (action !== "auto") {
+      setDevices((currentDevices) =>
+        currentDevices.map((device) => {
+          if (device.id !== deviceId) return device;
+
+          const currentState = device.trang_thai || { trang_thai_bat_tat: false };
+          if (action === "off") {
+            return {
+              ...device,
+              trang_thai: {
+                ...currentState,
+                trang_thai_bat_tat: false,
+                toc_do: device.loai_thiet_bi === "quat" ? 0 : currentState.toc_do,
+              },
+            };
+          }
+
+          if (action === "set_speed") {
+            return {
+              ...device,
+              trang_thai: {
+                ...currentState,
+                trang_thai_bat_tat: true,
+                toc_do: clampPercent(Number(additionalData?.speed ?? currentState.toc_do ?? 0)),
+              },
+            };
+          }
+
+          if (action === "set_rgb") {
+            const nextColor = {
+              r: clamp(Number(additionalData?.r ?? 255), 0, 255),
+              g: clamp(Number(additionalData?.g ?? 255), 0, 255),
+              b: clamp(Number(additionalData?.b ?? 255), 0, 255),
+              brightness: clampBrightness(Number(additionalData?.brightness ?? 96)),
+            };
+            return {
+              ...device,
+              trang_thai: {
+                ...currentState,
+                trang_thai_bat_tat: true,
+                mau_sac: JSON.stringify(nextColor),
+              },
+            };
+          }
+
+          if (action === "on") {
+            return {
+              ...device,
+              trang_thai: {
+                ...currentState,
+                trang_thai_bat_tat: true,
+              },
+            };
+          }
+
+          return device;
+        })
+      );
+    }
+
     setControlLoading(deviceId);
     try {
       const token = localStorage.getItem("token");
@@ -187,9 +248,142 @@ export function Devices() {
         } else {
           await fetchDevices();
         }
+      } else {
+        setDevices(previousDevices);
       }
     } catch (error) {
       console.error("Failed to control device:", error);
+      setDevices(previousDevices);
+    } finally {
+      setControlLoading(null);
+    }
+  };
+
+  const handleTurnOffAll = async () => {
+    const previousDevices = devices;
+    setDevices((currentDevices) =>
+      currentDevices.map((device) => {
+        if (!["den", "quat"].includes(device.loai_thiet_bi)) return device;
+
+        const currentState = device.trang_thai || { trang_thai_bat_tat: false };
+        return {
+          ...device,
+          trang_thai: {
+            ...currentState,
+            trang_thai_bat_tat: false,
+            toc_do: device.loai_thiet_bi === "quat" ? 0 : currentState.toc_do,
+          },
+        };
+      })
+    );
+    setDraftFanSpeeds({});
+
+    setControlLoading("all");
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/thiet-bi/control-all`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: "off" }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const updatedDevices = result?.data || [];
+        setDevices((currentDevices) =>
+          currentDevices.map((device) => {
+            const updated = updatedDevices.find((item: any) => item.id === device.id);
+            return updated ? { ...device, trang_thai: updated.trang_thai } : device;
+          })
+        );
+      } else {
+        setDevices(previousDevices);
+      }
+    } catch (error) {
+      console.error("Failed to turn off all devices:", error);
+      setDevices(previousDevices);
+    } finally {
+      setControlLoading(null);
+    }
+  };
+
+  const handleApplyDefaults = async () => {
+    const previousDevices = devices;
+    const defaultLightState = { r: 255, g: 255, b: 255, brightness: 50 };
+
+    setDevices((currentDevices) =>
+      currentDevices.map((device) => {
+        const currentState = device.trang_thai || { trang_thai_bat_tat: false };
+
+        if (device.loai_thiet_bi === "den") {
+          return {
+            ...device,
+            trang_thai: {
+              ...currentState,
+              mau_sac: JSON.stringify(defaultLightState),
+            },
+          };
+        }
+
+        if (device.loai_thiet_bi === "quat") {
+          return {
+            ...device,
+            trang_thai: {
+              ...currentState,
+              toc_do: 50,
+            },
+          };
+        }
+
+        return device;
+      })
+    );
+
+    setDraftLightControls((current) => {
+      const next = { ...current };
+      devices.filter((device) => device.loai_thiet_bi === "den").forEach((device) => {
+        next[device.id] = defaultLightState;
+      });
+      return next;
+    });
+    setDraftFanSpeeds((current) => {
+      const next = { ...current };
+      devices.filter((device) => device.loai_thiet_bi === "quat").forEach((device) => {
+        next[device.id] = 50;
+      });
+      return next;
+    });
+
+    setControlLoading("defaults");
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/thiet-bi/defaults`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const updatedDevices = result?.data || [];
+        setDevices((currentDevices) =>
+          currentDevices.map((device) => {
+            const updated = updatedDevices.find((item: any) => item.id === device.id);
+            return updated ? { ...device, trang_thai: updated.trang_thai } : device;
+          })
+        );
+      } else {
+        setDevices(previousDevices);
+      }
+    } catch (error) {
+      console.error("Failed to apply default device settings:", error);
+      setDevices(previousDevices);
     } finally {
       setControlLoading(null);
     }
@@ -284,9 +478,39 @@ export function Devices() {
     <div className="max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-1">Thiết Bị</h1>
-          <p className="text-sm text-gray-500">Điều khiển thiết bị</p>
+        <div className="flex items-center justify-between flex-wrap">
+          <div className="flex flex-col">
+            <h1 className="text-2xl font-bold text-gray-800 mb-1">Thiết Bị</h1>
+            <p className="text-sm text-gray-500">Điều khiển thiết bị</p>
+          </div>     
+          <div className="flex items-center gap-4">            
+            <button
+              type="button"
+              onClick={handleApplyDefaults}
+              disabled={controlLoading === "defaults"}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-50 text-[#6366f1] border border-indigo-100 font-semibold text-sm hover:bg-indigo-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {controlLoading === "defaults" ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Settings className="w-4 h-4" />
+              )}
+              Cài đặt mặc định
+            </button>
+            <button
+              type="button"
+              onClick={handleTurnOffAll}
+              disabled={controlLoading === "all"}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-red-50 text-red-600 border border-red-100 font-semibold text-sm hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {controlLoading === "all" ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <PowerOff className="w-4 h-4" />
+              )}
+              Tắt tất cả
+            </button>
+          </div>
         </div>
       </div>
 
@@ -485,6 +709,19 @@ export function Devices() {
               {/* Power Toggle Section */}
               <div className="flex items-center justify-between mb-4 p-4 bg-gradient-to-br from-cyan-50 to-purple-50 rounded-xl">
                 <span className="text-sm font-semibold text-gray-700">Power</span>
+                <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearSliderControl(fanSliderKey);
+                    handleControl(device.id, "auto");
+                  }}
+                  disabled={controlLoading === device.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#6366f1] border border-indigo-100 text-xs font-bold hover:bg-indigo-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Auto
+                </button>
                 <button
                   onClick={() => {
                     console.log("Fan power clicked:", device.id);
@@ -508,6 +745,7 @@ export function Devices() {
                     fanIsOn ? 'translate-x-6' : ''
                   }`}></div>
                 </button>
+                </div>
               </div>
 
               {/* Speed Slider */}
