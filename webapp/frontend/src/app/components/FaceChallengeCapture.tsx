@@ -77,7 +77,7 @@ export function FaceChallengeCapture({ steps, onComplete, onCancel, busy = false
           type="button"
           onClick={reset}
           disabled={busy}
-          className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+          className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 cursor-pointer"
         >
           <RotateCcw className="h-4 w-4" />
           Quét lại
@@ -87,7 +87,7 @@ export function FaceChallengeCapture({ steps, onComplete, onCancel, busy = false
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 cursor-pointer"
           >
             Đăng nhập bằng mật khẩu
           </button>

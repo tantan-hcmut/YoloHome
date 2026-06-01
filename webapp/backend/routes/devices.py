@@ -19,7 +19,7 @@ def get_or_create_device_state(thiet_bi_id):
 
 def clamp_brightness(value):
     try:
-        return max(30, min(100, int(value)))
+        return max(0, min(100, int(value)))
     except (TypeError, ValueError):
         return 96
 

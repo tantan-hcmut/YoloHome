@@ -74,7 +74,7 @@ const parseBrightnessPercent = (text: string): number | null => {
   const explicitPercent = extractPercent(text);
   if (explicitPercent !== null) return explicitPercent;
   if (hasAny(text, ["sang nhat", "sang toi da", "max brightness"])) return 100;
-  if (hasAny(text, ["toi nhat", "giam sang toi da", "min brightness"])) return 30;
+  if (hasAny(text, ["toi nhat", "giam sang toi da", "min brightness"])) return 0;
   return null;
 };
 

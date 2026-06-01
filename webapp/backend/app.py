@@ -190,7 +190,7 @@ def clamp_percent(value, default=50):
 
 
 def clamp_brightness(value, default=96):
-    return clamp_int(value, default, 30, 100)
+    return clamp_int(value, default, 0, 100)
 
 
 def parse_state_color(state):

@@ -68,12 +68,14 @@ export function FaceManagement() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header */}
+      <div className="bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Quản lý khuôn mặt</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">Thêm hoặc xóa khuôn mặt được phép đăng nhập YoloHome.</p>
+          <h1 className="text-2xl font-bold text-gray-800 mb-1">Quản lý khuôn mặt</h1>
+          <p className="text-sm text-gray-500">Thêm hoặc xóa khuôn mặt được phép đăng nhập YoloHome.</p>
         </div>
       </div>
+
 
       {(error || message) && (
         <div className={`rounded-xl border p-4 text-sm font-semibold ${error ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>

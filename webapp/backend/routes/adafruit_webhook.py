@@ -12,7 +12,7 @@ webhook_bp = Blueprint('webhook', __name__, url_prefix='/api/webhook')
 
 def clamp_brightness(value):
     try:
-        return max(30, min(100, int(value)))
+        return max(0, min(100, int(value)))
     except (TypeError, ValueError):
         return 96
 

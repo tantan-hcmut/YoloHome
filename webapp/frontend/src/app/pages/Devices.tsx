@@ -1,6 +1,6 @@
 import { Lightbulb, Fan, Loader } from "lucide-react";
 import { motion } from "motion/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Device {
   id: string;
@@ -16,6 +16,7 @@ interface Device {
 }
 
 const API_BASE = "http://localhost:5000/api";
+const SLIDER_DEBOUNCE_MS = 450;
 
 // Convert hex to RGB
 const hexToRgb = (hex: string): {r: number; g: number; b: number} => {
@@ -30,7 +31,9 @@ const hexToRgb = (hex: string): {r: number; g: number; b: number} => {
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
-const clampBrightness = (value: number) => clamp(value, 30, 100);
+const clampBrightness = (value: number) => clamp(value, 0, 100);
+
+const clampPercent = (value: number) => clamp(value, 0, 100);
 
 const rgbToHex = (r: number, g: number, b: number) =>
   `#${[r, g, b]
@@ -74,6 +77,15 @@ export function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [controlLoading, setControlLoading] = useState<string | null>(null);
+  const [draftLightControls, setDraftLightControls] = useState<Record<string, { r: number; g: number; b: number; brightness: number }>>({});
+  const [draftFanSpeeds, setDraftFanSpeeds] = useState<Record<string, number>>({});
+  const sliderTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const latestSliderPayloadsRef = useRef<Record<string, {
+    deviceId: string;
+    action: "set_rgb" | "set_speed";
+    additionalData: any;
+  }>>({});
+  const lastSentSliderPayloadsRef = useRef<Record<string, { signature: string; time: number }>>({});
 
   // Fetch devices từ API
   useEffect(() => {
@@ -105,6 +117,12 @@ export function Devices() {
   };
 
   // Control device
+  useEffect(() => {
+    return () => {
+      Object.values(sliderTimersRef.current).forEach(clearTimeout);
+    };
+  }, []);
+
   const handleControl = async (
     deviceId: string,
     action: "on" | "off" | "set_rgb" | "set_speed",
@@ -137,6 +155,35 @@ export function Devices() {
                 : device
             )
           );
+
+          if (action === "set_rgb") {
+            setDraftLightControls((current) => {
+              const draft = current[deviceId];
+              if (
+                !draft ||
+                draft.r !== additionalData?.r ||
+                draft.g !== additionalData?.g ||
+                draft.b !== additionalData?.b ||
+                draft.brightness !== additionalData?.brightness
+              ) {
+                return current;
+              }
+
+              const { [deviceId]: _removed, ...next } = current;
+              return next;
+            });
+          }
+
+          if (action === "set_speed") {
+            setDraftFanSpeeds((current) => {
+              if (current[deviceId] !== additionalData?.speed) {
+                return current;
+              }
+
+              const { [deviceId]: _removed, ...next } = current;
+              return next;
+            });
+          }
         } else {
           await fetchDevices();
         }
@@ -147,6 +194,80 @@ export function Devices() {
       setControlLoading(null);
     }
   };
+
+  const scheduleSliderControl = (
+    key: string,
+    deviceId: string,
+    action: "set_rgb" | "set_speed",
+    additionalData: any
+  ) => {
+    latestSliderPayloadsRef.current[key] = { deviceId, action, additionalData };
+
+    if (sliderTimersRef.current[key]) {
+      clearTimeout(sliderTimersRef.current[key]);
+    }
+
+    sliderTimersRef.current[key] = setTimeout(() => {
+      delete sliderTimersRef.current[key];
+      sendSliderControl(key, latestSliderPayloadsRef.current[key]);
+    }, SLIDER_DEBOUNCE_MS);
+  };
+
+  const sendSliderControl = (
+    key: string,
+    payload?: { deviceId: string; action: "set_rgb" | "set_speed"; additionalData: any }
+  ) => {
+    if (!payload) return;
+
+    const signature = JSON.stringify(payload);
+    const lastSent = lastSentSliderPayloadsRef.current[key];
+    const now = Date.now();
+    if (lastSent?.signature === signature && now - lastSent.time < 300) {
+      return;
+    }
+
+    lastSentSliderPayloadsRef.current[key] = { signature, time: now };
+    handleControl(payload.deviceId, payload.action, payload.additionalData);
+  };
+
+  const flushSliderControl = (
+    key: string,
+    deviceId: string,
+    action: "set_rgb" | "set_speed",
+    additionalData: any
+  ) => {
+    if (sliderTimersRef.current[key]) {
+      clearTimeout(sliderTimersRef.current[key]);
+      delete sliderTimersRef.current[key];
+    }
+
+    const payload = latestSliderPayloadsRef.current[key] ?? { deviceId, action, additionalData };
+    sendSliderControl(key, payload);
+  };
+
+  const clearSliderControl = (key: string) => {
+    if (sliderTimersRef.current[key]) {
+      clearTimeout(sliderTimersRef.current[key]);
+      delete sliderTimersRef.current[key];
+    }
+
+    delete latestSliderPayloadsRef.current[key];
+  };
+
+  const getDisplayLightState = (device: Device) => {
+    const savedState = getLightState(device);
+    const draft = draftLightControls[device.id];
+    if (!draft) return savedState;
+
+    const r = clamp(draft.r, 0, 255);
+    const g = clamp(draft.g, 0, 255);
+    const b = clamp(draft.b, 0, 255);
+    const brightness = clampBrightness(draft.brightness);
+    return { r, g, b, brightness, hex: rgbToHex(r, g, b) };
+  };
+
+  const getDisplayFanSpeed = (device: Device) =>
+    draftFanSpeeds[device.id] ?? clampPercent(Number(device.trang_thai?.toc_do || 0));
 
   const lights = devices.filter((d) => d.loai_thiet_bi === "den");
   const fans = devices.filter((d) => d.loai_thiet_bi === "quat");
@@ -165,7 +286,7 @@ export function Devices() {
       <div className="bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 mb-1">Thiết Bị</h1>
-          <p className="text-sm text-gray-500">Điều khiển đèn và quạt</p>
+          <p className="text-sm text-gray-500">Điều khiển thiết bị</p>
         </div>
       </div>
 
@@ -175,14 +296,16 @@ export function Devices() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0 }}
-          className="bg-gradient-to-r from-yellow-500/90 to-amber-400/70 backdrop-blur-xl rounded-2xl px-6 py-4 mb-4 border border-white/30 shadow-lg flex items-center gap-3"
+          className="bg-gradient-to-r from-indigo-400/90 to-purple-400/70 backdrop-blur-xl rounded-2xl px-6 py-4 mb-4 border border-white/30 shadow-lg flex items-center gap-3"
         >
           <Lightbulb className="w-6 h-6 text-white" />
           <h2 className="text-xl font-bold text-white">Đèn</h2>
         </motion.div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {lights.map((device, index) => {
-            const lightState = getLightState(device);
+            const lightState = getDisplayLightState(device);
+            const lightSliderKey = `light-${device.id}`;
+            const lightIsOn = !!device.trang_thai?.trang_thai_bat_tat;
 
             return (
             <motion.div
@@ -196,11 +319,11 @@ export function Devices() {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 bg-gradient-to-br ${
-                    device.trang_thai?.trang_thai_bat_tat ? 'from-yellow-400 to-orange-400' : 'from-gray-200 to-gray-300'
+                    device.trang_thai?.trang_thai_bat_tat ? 'from-blue-400 to-purple-400' : 'from-gray-200 to-gray-300'
                   } rounded-xl flex items-center justify-center`}>
                     <Lightbulb
-                      className={`w-6 h-6 ${device.trang_thai?.trang_thai_bat_tat ? 'text-white' : 'text-gray-500'}`}
-                      style={device.trang_thai?.trang_thai_bat_tat ? {
+                      className={`w-6 h-6 ${lightIsOn ? 'text-white' : 'text-gray-500'}`}
+                      style={lightIsOn ? {
                         filter: `drop-shadow(0 0 ${Math.max(2, lightState.brightness / 12)}px ${lightState.hex})`,
                       } : undefined}
                     />
@@ -218,70 +341,99 @@ export function Devices() {
                 <button
                   onClick={() => {
                     console.log("Light power clicked:", device.id);
-                    handleControl(
-                      device.id,
-                      device.trang_thai?.trang_thai_bat_tat ? "off" : "on"
-                    );
+                    clearSliderControl(lightSliderKey);
+                    if (lightIsOn) {
+                      handleControl(device.id, "off");
+                    } else {
+                      handleControl(device.id, "set_rgb", {
+                        r: lightState.r,
+                        g: lightState.g,
+                        b: lightState.b,
+                        brightness: lightState.brightness,
+                      });
+                    }
                   }}
                   disabled={controlLoading === device.id}
                   className={`relative w-14 h-8 rounded-full transition-all cursor-pointer hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    device.trang_thai?.trang_thai_bat_tat
+                    lightIsOn
                       ? 'bg-gradient-to-r from-[#6366f1] to-[#8b5cf6]'
                       : 'bg-gray-300'
                   }`}
                 >
                   <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform pointer-events-none ${
-                    device.trang_thai?.trang_thai_bat_tat ? 'translate-x-6' : ''
+                    lightIsOn ? 'translate-x-6' : ''
                   }`}></div>
                 </button>
               </div>
 
               {/* Color Picker */}
-              {device.trang_thai?.trang_thai_bat_tat && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Color</span>
+                  <input
+                    type="color"
+                    value={lightState.hex}
+                    onChange={(e) => {
+                      const rgb = hexToRgb(e.target.value);
+                      const nextLightState = {
+                        r: rgb.r,
+                        g: rgb.g,
+                        b: rgb.b,
+                        brightness: lightState.brightness,
+                      };
+                      setDraftLightControls((current) => ({
+                        ...current,
+                        [device.id]: nextLightState,
+                      }));
+                      if (lightIsOn) {
+                        flushSliderControl(lightSliderKey, device.id, "set_rgb", nextLightState);
+                      }
+                    }}
+                    disabled={controlLoading === device.id}
+                    className="w-10 h-10 cursor-pointer rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,0.5)] bg-transparent overflow-hidden [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none"
+                  />
+                </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-700">Color</span>
-                    <input
-                      type="color"
-                      value={lightState.hex}
-                      onChange={(e) => {
-                        const rgb = hexToRgb(e.target.value);
-                        handleControl(device.id, "set_rgb", {
-                          r: rgb.r,
-                          g: rgb.g,
-                          b: rgb.b,
-                          brightness: lightState.brightness,
-                        });
-                      }}
-                      disabled={controlLoading === device.id}
-                      className="w-10 h-10 cursor-pointer rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,0.5)] bg-transparent overflow-hidden [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none"
-                    />
+                    <span className="text-sm font-semibold text-gray-700">Brightness</span>
+                    <span className="text-sm font-bold text-[#6366f1]">{lightState.brightness}%</span>
                   </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700">Brightness</span>
-                      <span className="text-sm font-bold text-[#6366f1]">{lightState.brightness}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="30"
-                      max="100"
-                      value={lightState.brightness}
-                      onChange={(e) => handleControl(device.id, "set_rgb", {
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={lightState.brightness}
+                    onChange={(e) => {
+                      const nextLightState = {
                         r: lightState.r,
                         g: lightState.g,
                         b: lightState.b,
-                        brightness: parseInt(e.target.value),
-                      })}
-                      disabled={controlLoading === device.id}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                      style={{
-                        background: `linear-gradient(to right, #f59e0b 0%, #facc15 ${lightState.brightness}%, #e5e7eb ${lightState.brightness}%, #e5e7eb 100%)`
-                      }}
-                    />
-                  </div>
+                        brightness: clampBrightness(Number(e.target.value)),
+                      };
+                      setDraftLightControls((current) => ({
+                        ...current,
+                        [device.id]: nextLightState,
+                      }));
+                      if (lightIsOn) {
+                        scheduleSliderControl(lightSliderKey, device.id, "set_rgb", nextLightState);
+                      }
+                    }}
+                    onPointerUp={() => {
+                      if (lightIsOn) flushSliderControl(lightSliderKey, device.id, "set_rgb", lightState);
+                    }}
+                    onTouchEnd={() => {
+                      if (lightIsOn) flushSliderControl(lightSliderKey, device.id, "set_rgb", lightState);
+                    }}
+                    onKeyUp={() => {
+                      if (lightIsOn) flushSliderControl(lightSliderKey, device.id, "set_rgb", lightState);
+                    }}
+                    className="device-range w-full"
+                    style={{
+                      background: `linear-gradient(to right, #6366f1 0%, #8b5cf6 ${lightState.brightness}%, #e5e7eb ${lightState.brightness}%, #e5e7eb 100%)`
+                    }}
+                  />
                 </div>
-              )}
+              </div>
             </motion.div>
             );
           })}
@@ -300,7 +452,12 @@ export function Devices() {
           <h2 className="text-xl font-bold text-white">Quạt</h2>
         </motion.div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {fans.map((device, index) => (
+          {fans.map((device, index) => {
+            const fanSpeed = getDisplayFanSpeed(device);
+            const fanSliderKey = `fan-${device.id}`;
+            const fanIsOn = !!device.trang_thai?.trang_thai_bat_tat;
+
+            return (
             <motion.div
               key={device.id}
               initial={{ opacity: 0, y: 20 }}
@@ -314,8 +471,8 @@ export function Devices() {
                   <div className={`w-12 h-12 bg-gradient-to-br ${
                     device.trang_thai?.trang_thai_bat_tat ? 'from-blue-400 to-purple-400' : 'from-gray-200 to-gray-300'
                   } rounded-xl flex items-center justify-center`}>
-                    <Fan className={`w-6 h-6 ${device.trang_thai?.trang_thai_bat_tat ? 'text-white animate-spin' : 'text-gray-500'}`}
-                      style={{ animationDuration: device.trang_thai?.trang_thai_bat_tat ? `${2 - (device.trang_thai?.toc_do || 0) / 100}s` : 'auto' }}
+                    <Fan className={`w-6 h-6 ${fanIsOn ? 'text-white animate-spin' : 'text-gray-500'}`}
+                      style={{ animationDuration: fanIsOn ? `${Math.max(0.4, 2 - fanSpeed / 100)}s` : 'auto' }}
                     />
                   </div>
                   <div>
@@ -331,49 +488,81 @@ export function Devices() {
                 <button
                   onClick={() => {
                     console.log("Fan power clicked:", device.id);
-                    handleControl(
-                      device.id,
-                      device.trang_thai?.trang_thai_bat_tat ? "off" : "on"
-                    );
+                    clearSliderControl(fanSliderKey);
+                    if (fanIsOn) {
+                      handleControl(device.id, "off");
+                    } else {
+                      handleControl(device.id, "set_speed", {
+                        speed: fanSpeed,
+                      });
+                    }
                   }}
                   disabled={controlLoading === device.id}
                   className={`relative w-14 h-8 rounded-full transition-all cursor-pointer hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    device.trang_thai?.trang_thai_bat_tat
+                    fanIsOn
                       ? 'bg-gradient-to-r from-[#6366f1] to-[#8b5cf6]'
                       : 'bg-gray-300'
                   }`}
                 >
                   <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform pointer-events-none ${
-                    device.trang_thai?.trang_thai_bat_tat ? 'translate-x-6' : ''
+                    fanIsOn ? 'translate-x-6' : ''
                   }`}></div>
                 </button>
               </div>
 
               {/* Speed Slider */}
-              {device.trang_thai?.trang_thai_bat_tat && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-700">Speed</span>
-                    <span className="text-sm font-bold text-[#6366f1]">{device.trang_thai?.toc_do || 0}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={device.trang_thai?.toc_do || 0}
-                    onChange={(e) => handleControl(device.id, "set_speed", {
-                      speed: parseInt(e.target.value),
-                    })}
-                    disabled={controlLoading === device.id}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                    style={{
-                      background: `linear-gradient(to right, #6366f1 0%, #8b5cf6 ${device.trang_thai?.toc_do || 0}%, #e5e7eb ${device.trang_thai?.toc_do || 0}%, #e5e7eb 100%)`
-                    }}
-                  />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Speed</span>
+                  <span className="text-sm font-bold text-[#6366f1]">{fanSpeed}%</span>
                 </div>
-              )}
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={fanSpeed}
+                  onChange={(e) => {
+                    const nextSpeed = clampPercent(Number(e.target.value));
+                    setDraftFanSpeeds((current) => ({
+                      ...current,
+                      [device.id]: nextSpeed,
+                    }));
+                    if (fanIsOn) {
+                      scheduleSliderControl(fanSliderKey, device.id, "set_speed", {
+                        speed: nextSpeed,
+                      });
+                    }
+                  }}
+                  onPointerUp={() => {
+                    if (fanIsOn) {
+                      flushSliderControl(fanSliderKey, device.id, "set_speed", {
+                        speed: fanSpeed,
+                      });
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    if (fanIsOn) {
+                      flushSliderControl(fanSliderKey, device.id, "set_speed", {
+                        speed: fanSpeed,
+                      });
+                    }
+                  }}
+                  onKeyUp={() => {
+                    if (fanIsOn) {
+                      flushSliderControl(fanSliderKey, device.id, "set_speed", {
+                        speed: fanSpeed,
+                      });
+                    }
+                  }}
+                  className="device-range w-full"
+                  style={{
+                    background: `linear-gradient(to right, #6366f1 0%, #8b5cf6 ${fanSpeed}%, #e5e7eb ${fanSpeed}%, #e5e7eb 100%)`
+                  }}
+                />
+              </div>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

@@ -138,14 +138,14 @@ export function Login() {
             <button
               type="button"
               onClick={() => setMode("password")}
-              className={`rounded-xl px-4 py-3 text-sm font-semibold transition-all ${mode === "password" ? "bg-white text-[#6366f1] shadow" : "text-gray-500"}`}
+              className={`rounded-xl px-4 py-3 text-sm font-semibold cursor-pointer transition-all ${mode === "password" ? "bg-white text-[#6366f1] shadow" : "text-gray-500"}`}
             >
               Đăng nhập bằng mật khẩu
             </button>
             <button
               type="button"
               onClick={() => setMode("face")}
-              className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all ${mode === "face" ? "bg-white text-[#6366f1] shadow" : "text-gray-500"}`}
+              className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold cursor-pointer transition-all ${mode === "face" ? "bg-white text-[#6366f1] shadow" : "text-gray-500"}`}
             >
               <ScanFace className="h-4 w-4" />
               Đăng nhập bằng khuôn mặt
@@ -191,7 +191,7 @@ export function Login() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] py-3 font-semibold text-white transition-all hover:scale-[1.02] hover:shadow-lg disabled:scale-100 disabled:opacity-70"
+                className="w-full rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] py-3 font-semibold text-white transition-all hover:scale-[1.02] hover:shadow-lg disabled:scale-100 disabled:opacity-70 cursor-pointer"
               >
                 {isLoading ? "Đang đăng nhập..." : "Đăng nhập"}
               </button>
@@ -230,7 +230,7 @@ export function Login() {
           <p className="mb-6 bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] bg-clip-text text-lg font-bold text-transparent">GVHD: TÔN HUỲNH LONG</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {teamMembers.map((member) => (
-              <div key={member.role} className="rounded-2xl border border-white/30 bg-white/70 p-4 shadow-md backdrop-blur-md transition-all hover:-translate-y-1 hover:shadow-lg">
+              <div key={member.role} className="rounded-2xl border border-white/30 bg-white/70 p-4 shadow-md backdrop-blur-md transition-all hover:-translate-y-1 hover:shadow-lg cursor-pointer">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] text-lg font-bold text-white shadow-md">
                   {member.name[0]}
                 </div>
