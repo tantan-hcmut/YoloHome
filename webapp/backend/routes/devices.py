@@ -9,6 +9,21 @@ from datetime import datetime
 devices_bp = Blueprint('devices', __name__, url_prefix='/api/thiet-bi')
 
 
+def get_or_create_device_state(thiet_bi_id):
+    state = TrangThaiThietBi.query.filter_by(thiet_bi_id=thiet_bi_id).first()
+    if not state:
+        state = TrangThaiThietBi(thiet_bi_id=thiet_bi_id)
+        db.session.add(state)
+    return state
+
+
+def clamp_brightness(value):
+    try:
+        return max(30, min(100, int(value)))
+    except (TypeError, ValueError):
+        return 96
+
+
 @devices_bp.route('', methods=['POST'])
 def create_thiet_bi():
     payload = request.get_json() or {}
@@ -52,6 +67,18 @@ def create_thiet_bi():
 @devices_bp.route('', methods=['GET'])
 @require_auth
 def get_all_thiet_bi():
+    if request.args.get('sync') not in ['1', 'true', 'True']:
+        objs = ThietBi.query.all()
+        return jsonify([{
+            'id': x.id,
+            'nha_id': x.nha_id,
+            'ten_thiet_bi': x.ten_thiet_bi,
+            'loai_thiet_bi': x.loai_thiet_bi,
+            'nha_san_xuat': x.nha_san_xuat,
+            'vi_tri_lap_dat': x.vi_tri_lap_dat,
+            'trang_thai': x.trang_thai.to_dict() if x.trang_thai else None
+        } for x in objs]), 200
+
     try:
         house = Nha.query.filter(
             Nha.adafruit_username.isnot(None), 
@@ -96,12 +123,12 @@ def get_all_thiet_bi():
                     
                     # Nếu phân tích thành công, lưu trạng thái thực tế vào DB
                     if is_on is not None:
-                        state = TrangThaiThietBi.query.filter_by(thiet_bi_id=tb_id).first()
-                        if state:
-                            state.trang_thai_bat_tat = is_on
+                        state = get_or_create_device_state(tb_id)
+                        state.trang_thai_bat_tat = is_on
 
             db.session.commit()
     except Exception as e:
+        db.session.rollback()
         print(f"[Sync] Lỗi đồng bộ trạng thái thiết bị từ Adafruit: {e}")
         
     objs = ThietBi.query.all()
@@ -205,11 +232,14 @@ def control_thiet_bi(thiet_bi_id):
             command['action'] = 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off'
             
         elif action == 'set_rgb' and device.loai_thiet_bi == 'den':
+            r = payload.get('r', payload.get('LightR', 255))
+            g = payload.get('g', payload.get('lightG', 255))
+            b = payload.get('b', payload.get('lightB', 255))
             command['action'] = 'light_rgb'
-            command['r'] = payload.get('r', 255)
-            command['g'] = payload.get('g', 255)
-            command['b'] = payload.get('b', 255)
-            command['brightness'] = payload.get('brightness', 96)
+            command['r'] = r
+            command['g'] = g
+            command['b'] = b
+            command['brightness'] = clamp_brightness(payload.get('brightness', 96))
             
         elif action == 'set_speed' and device.loai_thiet_bi == 'quat':
             command['action'] = 'fan_speed'
@@ -222,14 +252,19 @@ def control_thiet_bi(thiet_bi_id):
             return jsonify({'status': 'error', 'message': response['message']}), 500
         
         # Cập nhật trạng thái trong DB (optimistic update)
-        state = TrangThaiThietBi.query.filter_by(thiet_bi_id=thiet_bi_id).first()
+        state = get_or_create_device_state(thiet_bi_id)
         if state:
             if action in ['on', 'light_on', 'fan_on']:
                 state.trang_thai_bat_tat = True
             elif action in ['off', 'light_off', 'fan_off']:
                 state.trang_thai_bat_tat = False
             elif action == 'set_rgb':
-                state.mau_sac = f"{payload.get('r', 255)},{payload.get('g', 255)},{payload.get('b', 255)}"
+                state.mau_sac = json.dumps({
+                    'r': payload.get('r', payload.get('LightR', 255)),
+                    'g': payload.get('g', payload.get('lightG', 255)),
+                    'b': payload.get('b', payload.get('lightB', 255)),
+                    'brightness': clamp_brightness(payload.get('brightness', 96))
+                }, ensure_ascii=False, separators=(',', ':'))
                 state.trang_thai_bat_tat = True  # Assume light turns on
             elif action == 'set_speed':
                 state.toc_do = payload.get('speed', 50)
@@ -263,6 +298,7 @@ def control_thiet_bi(thiet_bi_id):
             'data': {
                 'thiet_bi_id': thiet_bi_id,
                 'action': action,
+                'trang_thai': state.to_dict(),
                 'adafruit_response': response.get('data', {})
             }
         }), 200

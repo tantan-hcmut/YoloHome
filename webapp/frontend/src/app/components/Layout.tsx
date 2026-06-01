@@ -23,6 +23,121 @@ const navItems = [
   { path: "/history", label: "History", icon: HistoryIcon, color: "pastel-amber" },
 ];
 
+const normalizeVoiceText = (text: string) =>
+  text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/_/g, " ")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const hasAny = (text: string, keywords: string[]) =>
+  keywords.some((keyword) => text.includes(keyword));
+
+const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
+
+const extractPercent = (text: string): number | null => {
+  const match = text.match(/(\d{1,3})\s*(%|phan tram|percent)?/);
+  return match ? clampPercent(parseInt(match[1], 10)) : null;
+};
+
+const parseColor = (text: string): string | null => {
+  const colors: Array<[string, string[]]> = [
+    ["blue", ["xanh duong"]],
+    ["green", ["xanh la", "xanh luc"]],
+    ["red", ["do"]],
+    ["yellow", ["vang"]],
+    ["purple", ["tim"]],
+    ["orange", ["cam"]],
+    ["pink", ["hong"]],
+    ["white", ["trang"]],
+    ["gray", ["xam", "ghi", "gray", "grey"]],
+    ["cyan", ["xanh"]],
+  ];
+
+  return colors.find(([, keywords]) => hasAny(text, keywords))?.[0] ?? null;
+};
+
+const parseSpeedPercent = (text: string): number | null => {
+  const explicitPercent = extractPercent(text);
+  if (explicitPercent !== null) return explicitPercent;
+  if (hasAny(text, ["cham", "nhe", "low"])) return 30;
+  if (hasAny(text, ["trung binh", "vua", "medium"])) return 60;
+  if (hasAny(text, ["nhanh", "manh", "high"])) return 100;
+  return null;
+};
+
+const parseBrightnessPercent = (text: string): number | null => {
+  const explicitPercent = extractPercent(text);
+  if (explicitPercent !== null) return explicitPercent;
+  if (hasAny(text, ["sang nhat", "sang toi da", "max brightness"])) return 100;
+  if (hasAny(text, ["toi nhat", "giam sang toi da", "min brightness"])) return 30;
+  return null;
+};
+
+const isAllDevicesCommand = (text: string) =>
+  hasAny(text, [
+    "tat tat ca",
+    "tat het",
+    "tat toan bo",
+    "tat moi thiet bi",
+    "tat tat ca thiet bi",
+    "tat het thiet bi",
+  ]);
+
+const buildVoiceCommand = (text: string): any => {
+  const normalizedText = normalizeVoiceText(text);
+  const allDevices = isAllDevicesCommand(normalizedText);
+  const device = allDevices
+    ? "all"
+    : normalizedText.includes("den")
+    ? "light"
+    : normalizedText.includes("quat")
+      ? "fan"
+      : "";
+
+  const room = normalizedText.includes("phong khach")
+    ? "living_room"
+    : normalizedText.includes("phong ngu")
+      ? "bedroom"
+      : normalizedText.includes("phong bep")
+        ? "kitchen"
+        : normalizedText.includes("phong tam")
+          ? "bathroom"
+          : "";
+
+  const color = device === "light" ? parseColor(normalizedText) : null;
+  const speed = device === "fan" ? parseSpeedPercent(normalizedText) : null;
+  const hasBrightnessKeyword = hasAny(normalizedText, ["do sang", "sang", "toi", "brightness"]);
+  const brightness = device === "light" && (hasBrightnessKeyword || color !== null)
+    ? parseBrightnessPercent(normalizedText)
+    : null;
+
+  let action = "";
+  if (allDevices) action = "all_off";
+  else if (device === "light" && hasAny(normalizedText, ["tang do sang", "tang sang", "sang hon"])) action = "increase_brightness";
+  else if (device === "light" && hasAny(normalizedText, ["giam do sang", "giam sang", "toi hon"])) action = "decrease_brightness";
+  else if (hasAny(normalizedText, ["tat", "dong"])) action = "off";
+  else if (device === "light" && color) action = "set_color";
+  else if (device === "light" && brightness !== null) action = "set_brightness";
+  else if (device === "fan" && speed !== null) action = "set_speed";
+  else if (hasAny(normalizedText, ["tang toc", "tang toc do"])) action = "increase_speed";
+  else if (hasAny(normalizedText, ["giam toc", "giam toc do"])) action = "decrease_speed";
+  else if (hasAny(normalizedText, ["bat", "mo"])) action = "on";
+
+  const result: any = { action, device, room, original_text: text };
+  if (speed !== null) result.speed = speed;
+  if (color !== null) result.color = color;
+  if (brightness !== null) result.brightness = brightness;
+  if (action === "increase_brightness" || action === "decrease_brightness") {
+    result.brightness_delta = brightness ?? (action === "decrease_brightness" ? 30 : 10);
+  }
+  return result;
+};
+
 export function Layout({ children }: { children?: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
@@ -72,88 +187,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
   };
 
   const parseVoiceCommand = (text: string): any => {
-    const lowerText = text.toLowerCase();
-    let action = '';
-    let device = '';
-    let room = '';
-    let speed: string | number | null = null;
-    let color: string | null = null;
-
-    if (lowerText.includes('đèn')) device = 'light';
-    else if (lowerText.includes('quạt')) device = 'fan';
-
-    if (lowerText.includes('bật') || lowerText.includes('mở')) action = 'on';
-    else if (lowerText.includes('tắt') || lowerText.includes('đóng')) action = 'off';
-    else if (lowerText.includes('tăng tốc') || lowerText.includes('tăng tốc độ')) action = 'increase_speed';
-    else if (lowerText.includes('giảm tốc') || lowerText.includes('giảm tốc độ')) action = 'decrease_speed';
-    else if (lowerText.includes('đặt tốc độ') || lowerText.includes('chạy ở tốc độ')) action = 'set_speed';
-    else if (lowerText.includes('đổi màu') || lowerText.includes('đặt màu') || lowerText.includes('màu')) action = 'set_color';
-
-    if (lowerText.includes('phòng khách')) room = 'living_room';
-    else if (lowerText.includes('phòng ngủ')) room = 'bedroom';
-    else if (lowerText.includes('phòng bếp')) room = 'kitchen';
-    else if (lowerText.includes('phòng tắm')) room = 'bathroom';
-
-    if (device === 'fan') {
-      if (action === 'on') {
-        if (lowerText.includes('nhẹ') || lowerText.includes('chậm')) speed = 'low';
-        else if (lowerText.includes('trung bình') || lowerText.includes('vừa')) speed = 'medium';
-        else if (lowerText.includes('mạnh') || lowerText.includes('nhanh')) speed = 'high';
-      }
-      
-      if (action === 'set_speed') {
-        const speedMatch = lowerText.match(/tốc độ\s*(\d+)/);
-        if (speedMatch) speed = parseInt(speedMatch[1]);
-        else if (lowerText.includes('chậm') || lowerText.includes('nhẹ')) speed = 'low';
-        else if (lowerText.includes('trung bình') || lowerText.includes('vừa')) speed = 'medium';
-        else if (lowerText.includes('nhanh') || lowerText.includes('mạnh')) speed = 'high';
-      }
-    }
-
-    if (device === 'light') {
-      if (action === 'set_color' || lowerText.includes('màu')) {
-        if (lowerText.includes('đỏ')) color = 'red';
-        else if (lowerText.includes('xanh dương')) color = 'blue';
-        else if (lowerText.includes('xanh lá') || lowerText.includes('xanh lục')) color = 'green';
-        else if (lowerText.includes('vàng')) color = 'yellow';
-        else if (lowerText.includes('tím')) color = 'purple';
-        else if (lowerText.includes('cam')) color = 'orange';
-        else if (lowerText.includes('hồng')) color = 'pink';
-        else if (lowerText.includes('trắng')) color = 'white';
-        else if (lowerText.includes('xanh')) color = 'cyan'; 
-      }
-    }
-
-    if (!action && device === 'fan') {
-      if (lowerText.includes('tăng tốc') || lowerText.includes('tăng tốc độ')) action = 'increase_speed';
-      else if (lowerText.includes('giảm tốc') || lowerText.includes('giảm tốc độ')) action = 'decrease_speed';
-      else if (lowerText.includes('tốc độ')) {
-        action = 'set_speed';
-        const speedMatch = lowerText.match(/tốc độ\s*(\d+)/);
-        if (speedMatch) speed = parseInt(speedMatch[1]);
-        else if (lowerText.includes('chậm') || lowerText.includes('nhẹ')) speed = 'low';
-        else if (lowerText.includes('trung bình') || lowerText.includes('vừa')) speed = 'medium';
-        else if (lowerText.includes('nhanh') || lowerText.includes('mạnh')) speed = 'high';
-      }
-    }
-
-    if (!action && device === 'light' && lowerText.includes('màu')) {
-      action = 'set_color';
-      if (lowerText.includes('đỏ')) color = 'red';
-      else if (lowerText.includes('xanh dương')) color = 'blue';
-      else if (lowerText.includes('xanh lá') || lowerText.includes('xanh lục')) color = 'green';
-      else if (lowerText.includes('vàng')) color = 'yellow';
-      else if (lowerText.includes('tím')) color = 'purple';
-      else if (lowerText.includes('cam')) color = 'orange';
-      else if (lowerText.includes('hồng')) color = 'pink';
-      else if (lowerText.includes('trắng')) color = 'white';
-      else if (lowerText.includes('xanh')) color = 'cyan';
-    }
-
-    const result: any = { action, device, room, original_text: text };
-    if (speed !== null) result.speed = speed;
-    if (color !== null) result.color = color;
-    return result;
+    return buildVoiceCommand(text);
   };
 
   const toggleMic = () => {

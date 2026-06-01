@@ -4,6 +4,8 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import json
+import re
+import unicodedata
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timezone
 
@@ -55,32 +57,267 @@ app.register_blueprint(webhook_bp)
 # API VOICE COMMAND (ĐÃ MERGE TỪ CODE CỦA BẠN CẬU)
 # ==========================================
 
+VOICE_COLOR_RGB = {
+    'red': (255, 0, 0),
+    'green': (0, 255, 0),
+    'blue': (0, 0, 255),
+    'yellow': (255, 255, 0),
+    'purple': (128, 0, 128),
+    'orange': (255, 165, 0),
+    'pink': (255, 105, 180),
+    'white': (255, 255, 255),
+    'cyan': (0, 255, 255),
+    'gray': (31, 31, 31),
+    'grey': (31, 31, 31),
+    'do': (255, 0, 0),
+    'xanh_la': (0, 255, 0),
+    'xanh_duong': (0, 0, 255),
+    'vang': (255, 255, 0),
+    'tim': (128, 0, 128),
+    'cam': (255, 165, 0),
+    'hong': (255, 105, 180),
+    'trang': (255, 255, 255),
+    'xam': (31, 31, 31),
+    'mau do': (255, 0, 0),
+    'mau xanh la': (0, 255, 0),
+    'mau xanh luc': (0, 255, 0),
+    'mau xanh duong': (0, 0, 255),
+    'mau vang': (255, 255, 0),
+    'mau tim': (128, 0, 128),
+    'mau cam': (255, 165, 0),
+    'mau hong': (255, 105, 180),
+    'mau trang': (255, 255, 255),
+    'mau xam': (31, 31, 31),
+    'xanh luc': (0, 255, 0),
+    'xanh la': (0, 255, 0),
+    'xanh duong': (0, 0, 255),
+    'xanh': (0, 255, 255),
+}
+
+
+def normalize_voice_text(text):
+    normalized = unicodedata.normalize('NFD', str(text).strip().lower())
+    normalized = ''.join(ch for ch in normalized if unicodedata.category(ch) != 'Mn')
+    normalized = normalized.replace('đ', 'd')
+    normalized = normalized.replace('_', ' ').replace('-', ' ')
+    return ' '.join(normalized.split())
+
+
+def voice_has_any(text, keywords):
+    return any(keyword in text for keyword in keywords)
+
+
+def extract_voice_percent(text):
+    match = re.search(r'(\d{1,3})\s*(%|phan tram|percent)?', text)
+    return clamp_percent(match.group(1), None) if match else None
+
+
+def is_all_off_voice_command(text):
+    return voice_has_any(text, [
+        'tat tat ca',
+        'tat het',
+        'tat toan bo',
+        'tat moi thiet bi',
+        'tat tat ca thiet bi',
+        'tat het thiet bi',
+        'tat ca thiet bi',
+    ])
+
+
+def parse_voice_color(color):
+    if not color:
+        return None
+
+    if isinstance(color, dict):
+        try:
+            return (
+                max(0, min(255, int(color.get('LightR', color.get('r', 255))))),
+                max(0, min(255, int(color.get('lightG', color.get('g', 255))))),
+                max(0, min(255, int(color.get('lightB', color.get('b', 255)))))
+            )
+        except (TypeError, ValueError):
+            return None
+
+    color_text = normalize_voice_text(color)
+    if color_text in VOICE_COLOR_RGB:
+        return VOICE_COLOR_RGB[color_text]
+
+    for color_key in sorted(VOICE_COLOR_RGB, key=len, reverse=True):
+        pattern = r'(?<!\w)' + re.escape(color_key) + r'(?!\w)'
+        if re.search(pattern, color_text):
+            return VOICE_COLOR_RGB[color_key]
+
+    if color_text.startswith('#') and len(color_text) == 7:
+        try:
+            return (
+                int(color_text[1:3], 16),
+                int(color_text[3:5], 16),
+                int(color_text[5:7], 16)
+            )
+        except ValueError:
+            return None
+
+    parts = [part.strip() for part in color_text.split(',')]
+    if len(parts) == 3:
+        try:
+            return tuple(max(0, min(255, int(part))) for part in parts)
+        except ValueError:
+            return None
+
+    return None
+
+
+def build_light_rgb_payload(r, g, b, source='webapp', brightness=96):
+    return {
+        'action': 'light_rgb',
+        'source': source,
+        'r': r,
+        'g': g,
+        'b': b,
+        'brightness': brightness
+    }
+
+
+def clamp_int(value, default=50, min_value=0, max_value=100):
+    try:
+        return max(min_value, min(max_value, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def clamp_percent(value, default=50):
+    return clamp_int(value, default, 0, 100)
+
+
+def clamp_brightness(value, default=96):
+    return clamp_int(value, default, 30, 100)
+
+
+def parse_state_color(state):
+    if not state or not state.mau_sac:
+        return 255, 255, 255, 96
+
+    try:
+        color = json.loads(state.mau_sac)
+        return (
+            clamp_int(color.get('r', color.get('LightR', 255)), 255, 0, 255),
+            clamp_int(color.get('g', color.get('lightG', 255)), 255, 0, 255),
+            clamp_int(color.get('b', color.get('lightB', 255)), 255, 0, 255),
+            clamp_brightness(color.get('brightness', 96), 96)
+        )
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return 255, 255, 255, 96
+
+
 @app.route('/api/voice-command', methods=['POST'])
 def receive_voice_command():
     from models import db, VoiceCommand, ThietBi, TrangThaiThietBi, LichSuHoatDong
-    from routes.devices import send_command_to_adafruit
+    from routes.devices import get_or_create_device_state, send_command_to_adafruit
     
     try:
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Không có dữ liệu gửi lên'}), 400
 
+        original_text = data.get('original_text', '')
+        normalized_text = normalize_voice_text(original_text)
+        action = data.get('action') or ''
+        device_name = data.get('device') or ''
+        voice_percent = extract_voice_percent(normalized_text)
+
+        if is_all_off_voice_command(normalized_text):
+            action = 'all_off'
+            device_name = 'all'
+        else:
+            if not device_name:
+                if 'den' in normalized_text:
+                    device_name = 'light'
+                elif 'quat' in normalized_text:
+                    device_name = 'fan'
+                elif voice_has_any(normalized_text, ['do sang', 'tang sang', 'giam sang', 'sang hon', 'toi hon', 'brightness']):
+                    device_name = 'light'
+
+            if device_name == 'light':
+                if voice_has_any(normalized_text, ['tang do sang', 'tang sang', 'sang hon']):
+                    action = 'increase_brightness'
+                    data['brightness_delta'] = data.get('brightness_delta') or voice_percent or 10
+                elif voice_has_any(normalized_text, ['giam do sang', 'giam sang', 'toi hon']):
+                    action = 'decrease_brightness'
+                    data['brightness_delta'] = data.get('brightness_delta') or voice_percent or 30
+                elif voice_has_any(normalized_text, ['do sang', 'brightness']) and voice_percent is not None:
+                    action = 'set_brightness'
+                    data['brightness'] = data.get('brightness') or voice_percent
+
+        data['action'] = action
+        data['device'] = device_name
+
         # 1. Lưu lệnh vào DB (Bảng VoiceCommand của bạn cậu)
         command = VoiceCommand(
-            action=data.get('action', ''),
-            device=data.get('device', ''),
+            action=action,
+            device=device_name,
             room=data.get('room', ''),
             speed=str(data.get('speed', '')) if data.get('speed') else None,
             color=str(data.get('color', '')) if data.get('color') else None,
-            original_text=data.get('original_text', ''),
-            command_json=json.dumps(data)
+            original_text=original_text,
+            command_json=json.dumps(data, ensure_ascii=False)
         )
         db.session.add(command)
         db.session.commit()
 
         # 2. Thực thi lệnh thực tế (Kết nối với luồng điều khiển của cậu)
-        action = data.get('action')
-        device_type = 'den' if data.get('device') == 'light' else 'quat' if data.get('device') == 'fan' else None
+        if action == 'all_off' or device_name == 'all':
+            devices = ThietBi.query.filter(ThietBi.loai_thiet_bi.in_(['den', 'quat'])).all()
+            adafruit_commands = []
+
+            for device in devices:
+                cmd_payload = {
+                    'action': 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off',
+                    'source': 'webapp'
+                }
+                adafruit_response = send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
+                adafruit_commands.append({
+                    'thiet_bi_id': device.id,
+                    'command': cmd_payload,
+                    'success': adafruit_response.get('success', False)
+                })
+
+                state = get_or_create_device_state(device.id)
+                state.trang_thai_bat_tat = False
+                if device.loai_thiet_bi == 'quat':
+                    state.toc_do = 0
+
+                db.session.add(LichSuHoatDong(
+                    nha_id=device.nha_id,
+                    thiet_bi_id=device.id,
+                    user_id=None,
+                    hanh_dong=f"Voice Command: {data.get('original_text')}",
+                    thong_so_thay_doi=json.dumps({
+                        'action': 'all_off',
+                        'adafruit_command': cmd_payload
+                    }, ensure_ascii=False)
+                ))
+
+            command.action = 'all_off'
+            command.command_json = json.dumps({
+                **data,
+                'adafruit_commands': adafruit_commands
+            }, ensure_ascii=False)
+            command.status = 'processed'
+            command.processed_at = datetime.utcnow()
+            db.session.commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Đã tắt tất cả thiết bị',
+                'id': command.id,
+                'data': {
+                    'action': 'all_off',
+                    'affected_devices': len(devices),
+                    'adafruit_commands': adafruit_commands
+                }
+            }), 200
+
+        device_type = 'den' if device_name == 'light' else 'quat' if device_name == 'fan' else None
 
         if not action or not device_type:
             return jsonify({'message': 'Lưu lệnh thành công, nhưng không đủ thông tin để bật/tắt', 'id': command.id}), 200
@@ -91,34 +328,164 @@ def receive_voice_command():
             return jsonify({'message': 'Lệnh lưu thành công, nhưng không tìm thấy thiết bị phù hợp', 'id': command.id}), 404
 
         # Gửi lệnh xuống Adafruit
-        cmd_payload = {'action': 'on' if action in ['on', 'set_color', 'set_speed'] else 'off', 'source': 'voice'}
-        if device_type == 'den':
-            cmd_payload['action'] = 'light_on' if cmd_payload['action'] == 'on' else 'light_off'
+        color_rgb = parse_voice_color(data.get('color')) or parse_voice_color(data.get('original_text'))
+        speed_value = data.get('speed')
+        if isinstance(speed_value, str):
+            speed_value = {
+                'low': 30,
+                'medium': 60,
+                'high': 100
+            }.get(speed_value.lower(), speed_value)
+
+        speed_value = clamp_percent(speed_value, 50)
+        brightness_value = clamp_brightness(data.get('brightness'), 96)
+        state = get_or_create_device_state(device.id)
+        current_r, current_g, current_b, current_brightness = parse_state_color(state)
+
+        if action in ['increase_brightness', 'decrease_brightness'] and device_type == 'den':
+            default_delta = 30 if action == 'decrease_brightness' else 10
+            brightness_delta = clamp_percent(data.get('brightness_delta'), default_delta)
+            if action == 'increase_brightness':
+                brightness_value = clamp_brightness(current_brightness + brightness_delta, current_brightness)
+            else:
+                brightness_value = clamp_brightness(current_brightness - brightness_delta, current_brightness)
+
+        if color_rgb and device_type == 'den' and action != 'off':
+            action = 'set_color'
+        elif device_type == 'den' and data.get('brightness') is not None and action not in ['off', 'increase_brightness', 'decrease_brightness']:
+            action = 'set_brightness'
+        elif device_type == 'quat' and data.get('speed') is not None and action != 'off':
+            action = 'set_speed'
+
+        cmd_payload = {'source': 'webapp'}
+        if action == 'set_color':
+            if device_type != 'den':
+                return jsonify({'error': 'Lenh doi mau chi ho tro den', 'id': command.id}), 400
+            if not color_rgb:
+                return jsonify({'error': 'Khong nhan dien duoc mau can doi', 'id': command.id}), 400
+
+            r, g, b = color_rgb
+            cmd_payload = build_light_rgb_payload(
+                r,
+                g,
+                b,
+                source='webapp',
+                brightness=brightness_value
+            )
+        elif action == 'set_brightness' and device_type == 'den':
+            cmd_payload = build_light_rgb_payload(
+                current_r,
+                current_g,
+                current_b,
+                source='webapp',
+                brightness=brightness_value
+            )
+        elif action in ['increase_brightness', 'decrease_brightness'] and device_type == 'den':
+            cmd_payload = build_light_rgb_payload(
+                current_r,
+                current_g,
+                current_b,
+                source='webapp',
+                brightness=brightness_value
+            )
+        elif action == 'set_speed' and device_type == 'quat':
+            cmd_payload.update({
+                'action': 'fan_speed',
+                'speed': speed_value
+            })
         else:
-            cmd_payload['action'] = 'fan_on' if cmd_payload['action'] == 'on' else 'fan_off'
+            should_turn_on = action in ['on', 'increase_speed']
+            if device_type == 'den':
+                cmd_payload['action'] = 'light_on' if should_turn_on else 'light_off'
+            else:
+                cmd_payload['action'] = 'fan_on' if should_turn_on else 'fan_off'
             
-        send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
+        adafruit_response = send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
 
         # Cập nhật trạng thái và ghi log Lịch sử hoạt động
-        state = TrangThaiThietBi.query.filter_by(thiet_bi_id=device.id).first()
-        if state:
+        if action == 'set_color':
+            r, g, b = color_rgb
+            state.trang_thai_bat_tat = True
+            state.mau_sac = json.dumps({
+                'r': r,
+                'g': g,
+                'b': b,
+                'brightness': brightness_value
+            }, ensure_ascii=False, separators=(',', ':'))
+        elif action == 'set_brightness' and device_type == 'den':
+            state.trang_thai_bat_tat = True
+            state.mau_sac = json.dumps({
+                'r': current_r,
+                'g': current_g,
+                'b': current_b,
+                'brightness': brightness_value
+            }, ensure_ascii=False, separators=(',', ':'))
+        elif action in ['increase_brightness', 'decrease_brightness'] and device_type == 'den':
+            state.trang_thai_bat_tat = True
+            state.mau_sac = json.dumps({
+                'r': current_r,
+                'g': current_g,
+                'b': current_b,
+                'brightness': brightness_value
+            }, ensure_ascii=False, separators=(',', ':'))
+        elif action == 'set_speed' and device_type == 'quat':
+            state.trang_thai_bat_tat = True
+            state.toc_do = speed_value
+        else:
             state.trang_thai_bat_tat = (cmd_payload['action'] in ['light_on', 'fan_on'])
+            if cmd_payload['action'] == 'fan_off':
+                state.toc_do = 0
         
         new_history = LichSuHoatDong(
             nha_id=device.nha_id,
             thiet_bi_id=device.id,
             user_id=None,
             hanh_dong=f"Voice Command: {data.get('original_text')}",
-            thong_so_thay_doi=action
+            thong_so_thay_doi=json.dumps({
+                'action': action,
+                'color': data.get('color'),
+                'rgb': {
+                    'r': color_rgb[0],
+                    'g': color_rgb[1],
+                    'b': color_rgb[2]
+                } if color_rgb else None,
+                'brightness': brightness_value if action in ['set_color', 'set_brightness', 'increase_brightness', 'decrease_brightness'] else None,
+                'speed': speed_value if action == 'set_speed' else None,
+                'adafruit_command': cmd_payload
+            }, ensure_ascii=False)
         )
         db.session.add(new_history)
 
         # Đánh dấu lệnh Voice đã được xử lý xong
+        command.command_json = json.dumps({
+            **data,
+            'rgb': {
+                'r': color_rgb[0],
+                'g': color_rgb[1],
+                'b': color_rgb[2]
+            } if color_rgb else None,
+            'brightness': brightness_value if action in ['set_color', 'set_brightness', 'increase_brightness', 'decrease_brightness'] else None,
+            'adafruit_command': cmd_payload,
+            'adafruit_success': adafruit_response.get('success', False)
+        }, ensure_ascii=False)
+        command.action = action
+        command.speed = str(speed_value) if action == 'set_speed' else command.speed
         command.status = 'processed'
         command.processed_at = datetime.utcnow()
         db.session.commit()
 
-        return jsonify({'success': True, 'message': 'Đã xử lý lệnh giọng nói thành công', 'id': command.id}), 200
+        return jsonify({
+            'success': True,
+            'message': 'Đã xử lý lệnh giọng nói thành công',
+            'id': command.id,
+            'data': {
+                'thiet_bi_id': device.id,
+                'action': action,
+                'trang_thai': state.to_dict(),
+                'adafruit_command': cmd_payload,
+                'adafruit_response': adafruit_response
+            }
+        }), 200
 
     except Exception as e:
         db.session.rollback()

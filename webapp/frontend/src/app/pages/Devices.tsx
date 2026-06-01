@@ -27,6 +27,49 @@ const hexToRgb = (hex: string): {r: number; g: number; b: number} => {
   } : {r: 255, g: 255, b: 255};
 };
 
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value));
+
+const clampBrightness = (value: number) => clamp(value, 30, 100);
+
+const rgbToHex = (r: number, g: number, b: number) =>
+  `#${[r, g, b]
+    .map((value) => clamp(Number(value) || 0, 0, 255).toString(16).padStart(2, "0"))
+    .join("")}`;
+
+const getLightState = (device: Device) => {
+  const fallback = { r: 255, g: 255, b: 255, brightness: 96 };
+  const savedColor = device.trang_thai?.mau_sac;
+
+  if (!savedColor) {
+    return { ...fallback, hex: rgbToHex(fallback.r, fallback.g, fallback.b) };
+  }
+
+  try {
+    const parsed = JSON.parse(savedColor);
+    const r = clamp(Number(parsed.r ?? parsed.LightR ?? fallback.r), 0, 255);
+    const g = clamp(Number(parsed.g ?? parsed.lightG ?? fallback.g), 0, 255);
+    const b = clamp(Number(parsed.b ?? parsed.lightB ?? fallback.b), 0, 255);
+    const brightness = clampBrightness(Number(parsed.brightness ?? fallback.brightness));
+    return { r, g, b, brightness, hex: rgbToHex(r, g, b) };
+  } catch {
+    if (savedColor.startsWith("#")) {
+      const rgb = hexToRgb(savedColor);
+      return { ...rgb, brightness: clampBrightness(fallback.brightness), hex: rgbToHex(rgb.r, rgb.g, rgb.b) };
+    }
+
+    const parts = savedColor.split(",").map((part) => Number(part.trim()));
+    if (parts.length >= 3 && parts.every((part) => Number.isFinite(part))) {
+      const r = clamp(parts[0], 0, 255);
+      const g = clamp(parts[1], 0, 255);
+      const b = clamp(parts[2], 0, 255);
+      return { r, g, b, brightness: clampBrightness(fallback.brightness), hex: rgbToHex(r, g, b) };
+    }
+  }
+
+  return { ...fallback, brightness: clampBrightness(fallback.brightness), hex: rgbToHex(fallback.r, fallback.g, fallback.b) };
+};
+
 export function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,8 +126,20 @@ export function Devices() {
       });
 
       if (response.ok) {
-        // Refresh devices
-        await fetchDevices();
+        const result = await response.json();
+        const updatedState = result?.data?.trang_thai;
+
+        if (updatedState) {
+          setDevices((currentDevices) =>
+            currentDevices.map((device) =>
+              device.id === deviceId
+                ? { ...device, trang_thai: updatedState }
+                : device
+            )
+          );
+        } else {
+          await fetchDevices();
+        }
       }
     } catch (error) {
       console.error("Failed to control device:", error);
@@ -126,7 +181,10 @@ export function Devices() {
           <h2 className="text-xl font-bold text-white">Đèn</h2>
         </motion.div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {lights.map((device, index) => (
+          {lights.map((device, index) => {
+            const lightState = getLightState(device);
+
+            return (
             <motion.div
               key={device.id}
               initial={{ opacity: 0, y: 20 }}
@@ -140,7 +198,12 @@ export function Devices() {
                   <div className={`w-12 h-12 bg-gradient-to-br ${
                     device.trang_thai?.trang_thai_bat_tat ? 'from-yellow-400 to-orange-400' : 'from-gray-200 to-gray-300'
                   } rounded-xl flex items-center justify-center`}>
-                    <Lightbulb className={`w-6 h-6 ${device.trang_thai?.trang_thai_bat_tat ? 'text-white' : 'text-gray-500'}`} />
+                    <Lightbulb
+                      className={`w-6 h-6 ${device.trang_thai?.trang_thai_bat_tat ? 'text-white' : 'text-gray-500'}`}
+                      style={device.trang_thai?.trang_thai_bat_tat ? {
+                        filter: `drop-shadow(0 0 ${Math.max(2, lightState.brightness / 12)}px ${lightState.hex})`,
+                      } : undefined}
+                    />
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-800">{device.ten_thiet_bi}</h3>
@@ -180,24 +243,48 @@ export function Devices() {
                     <span className="text-sm font-semibold text-gray-700">Color</span>
                     <input
                       type="color"
-                      defaultValue="#FFFFFF"
+                      value={lightState.hex}
                       onChange={(e) => {
                         const rgb = hexToRgb(e.target.value);
                         handleControl(device.id, "set_rgb", {
                           r: rgb.r,
                           g: rgb.g,
                           b: rgb.b,
-                          brightness: 96,
+                          brightness: lightState.brightness,
                         });
                       }}
                       disabled={controlLoading === device.id}
                       className="w-10 h-10 cursor-pointer rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,0.5)] bg-transparent overflow-hidden [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none"
                     />
                   </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-gray-700">Brightness</span>
+                      <span className="text-sm font-bold text-[#6366f1]">{lightState.brightness}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="30"
+                      max="100"
+                      value={lightState.brightness}
+                      onChange={(e) => handleControl(device.id, "set_rgb", {
+                        r: lightState.r,
+                        g: lightState.g,
+                        b: lightState.b,
+                        brightness: parseInt(e.target.value),
+                      })}
+                      disabled={controlLoading === device.id}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      style={{
+                        background: `linear-gradient(to right, #f59e0b 0%, #facc15 ${lightState.brightness}%, #e5e7eb ${lightState.brightness}%, #e5e7eb 100%)`
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

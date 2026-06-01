@@ -4,9 +4,18 @@ Adafruit sẽ POST JSON tới đây khi dữ liệu thay đổi
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+import json
 from models import db, ThietBi, TrangThaiCamBien, LichSuCamBien, TrangThaiThietBi, AdafruitFeedMapping
 
 webhook_bp = Blueprint('webhook', __name__, url_prefix='/api/webhook')
+
+
+def clamp_brightness(value):
+    try:
+        return max(30, min(100, int(value)))
+    except (TypeError, ValueError):
+        return 96
+
 
 @webhook_bp.route('/adafruit/sensor', methods=['POST'])
 def adafruit_sensor_webhook():
@@ -96,9 +105,9 @@ def adafruit_device_webhook():
         action = payload.get('action', '')
         value = payload.get('value')
         brightness = payload.get('brightness', 96)
-        r = payload.get('r', 255)
-        g = payload.get('g', 255)
-        b = payload.get('b', 255)
+        r = payload.get('r', payload.get('LightR', 255))
+        g = payload.get('g', payload.get('lightG', 255))
+        b = payload.get('b', payload.get('lightB', 255))
         
         # Map feed → device list (sử dụng raw_key)
         feed_device_map = {
@@ -128,9 +137,14 @@ def adafruit_device_webhook():
             elif action == 'off' or str(value) == '0':
                 device.trang_thai.trang_thai_bat_tat = False
                 device.trang_thai.toc_do = 0
-            elif action == 'set_rgb':
+            elif action in ['set_rgb', 'light_rgb']:
                 device.trang_thai.trang_thai_bat_tat = True
-                device.trang_thai.mau_sac = f'#{r:02x}{g:02x}{b:02x}'
+                device.trang_thai.mau_sac = json.dumps({
+                    'r': int(r),
+                    'g': int(g),
+                    'b': int(b),
+                    'brightness': clamp_brightness(brightness)
+                }, ensure_ascii=False, separators=(',', ':'))
             elif action == 'set_speed':
                 device.trang_thai.toc_do = int(value) if value else 50
             
