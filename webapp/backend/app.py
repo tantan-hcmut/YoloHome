@@ -52,11 +52,6 @@ app.register_blueprint(history_bp)
 from routes.adafruit_webhook import webhook_bp
 app.register_blueprint(webhook_bp)
 
-
-# ==========================================
-# API VOICE COMMAND (ĐÃ MERGE TỪ CODE CỦA BẠN CẬU)
-# ==========================================
-
 VOICE_COLOR_RGB = {
     'red': (255, 0, 0),
     'green': (0, 255, 0),
@@ -251,7 +246,7 @@ def receive_voice_command():
         data['action'] = action
         data['device'] = device_name
 
-        # 1. Lưu lệnh vào DB (Bảng VoiceCommand của bạn cậu)
+        # 1. Lưu lệnh vào DB
         command = VoiceCommand(
             action=action,
             device=device_name,
@@ -522,12 +517,12 @@ def mark_command_processed(command_id):
 
 
 # ==========================================
-# Background Task: Auto-sync từ Adafruit mỗi 30s
+# Background Task: Auto-sync từ Adafruit mỗi 30s để cập nhật trạng thái cảm biến (nhiệt độ, độ ẩm)
 # ==========================================
 
 def sync_sensor_from_adafruit_background():
     """
-    Background task: Poll Adafruit feeds mỗi 30 giây
+    Background task: Poll Adafruit feeds mỗi 30s để cập nhật trạng thái cảm biến (nhiệt độ, độ ẩm)
     """
     with app.app_context():
         from utils.adafruit_sync import sync_sensor_data_from_adafruit
@@ -625,13 +620,13 @@ def check_and_execute_schedules_background():
 
 # Initialize APScheduler
 scheduler = BackgroundScheduler()
-# Chạy Hẹn giờ (Mỗi 10 giây)
+# Chạy Hẹn giờ (Mỗi 3 giây)
 scheduler.add_job(
     func=check_and_execute_schedules_background,
     trigger="interval",
-    seconds=10,
+    seconds=3,
     id="execute_schedules",
-    name="Check schedules every 10s",
+    name="Check schedules every 3s",
     replace_existing=True
 )
 
@@ -646,7 +641,7 @@ scheduler.add_job(
 )
 
 scheduler.start()
-print("[Scheduler] Background jobs started (Schedules: 10s, Sensors: 30s)")
+print("[Scheduler] Background jobs started (Schedules: 3s, Sensors: 30s)")
 
 with app.app_context():
     db.create_all()

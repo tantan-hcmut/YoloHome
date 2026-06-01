@@ -14,6 +14,11 @@ interface SensorData {
   thoi_gian_cap_nhat?: string;
 }
 
+const getSensorTimestamp = (item: any) =>
+  item.thoi_gian || item.thoi_gian_ghi_nhan || item.thoi_gian_cap_nhat || item.created_at;
+
+const isValidDate = (date: Date) => !Number.isNaN(date.getTime());
+
 export function Dashboard() {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [allSensors, setAllSensors] = useState<SensorData[]>([]);
@@ -124,14 +129,25 @@ export function Dashboard() {
         const result = await response.json();
         
         // Transform dữ liệu cho biểu đồ
-        const chartDataFormatted = result.data.map((item: any) => ({
-          time: new Date(item.thoi_gian).toLocaleTimeString('vi-VN', {
-            hour: '2-digit',
-            minute: '2-digit'
-          }),
-          temp: item.nhiet_do || 0,
-          humidity: item.do_am || 0
-        }));
+        const chartDataFormatted = result.data
+          .map((item: any) => {
+            const timestamp = getSensorTimestamp(item);
+            const date = new Date(timestamp);
+
+            if (!timestamp || !isValidDate(date)) {
+              return null;
+            }
+
+            return {
+              time: date.toLocaleTimeString('vi-VN', {
+                hour: '2-digit',
+                minute: '2-digit'
+              }),
+              temp: item.nhiet_do || 0,
+              humidity: item.do_am || 0
+            };
+          })
+          .filter(Boolean);
         
         setChartData(chartDataFormatted);
       }
@@ -153,7 +169,7 @@ export function Dashboard() {
 
   const rooms = [
     { 
-      name: "Living Room", 
+      name: "Phòng khách", 
       temp: sensorData?.nhiet_do || 0, 
       humidity: sensorData?.do_am || 0, 
     },
@@ -162,8 +178,8 @@ export function Dashboard() {
     <div className="max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
-        <h1 className="text-2xl font-bold text-gray-800 mb-1">Dashboard</h1>
-        <p className="text-sm text-gray-500">Monitor your smart home environment</p>
+        <h1 className="text-2xl font-bold text-gray-800 mb-1">Bảng điều khiển</h1>
+        <p className="text-sm text-gray-500">Giám sát môi trường nhà thông minh của bạn</p>
         {error && <p className="text-sm text-red-600 mt-2">Lỗi: {error}</p>}
       </div>
 
