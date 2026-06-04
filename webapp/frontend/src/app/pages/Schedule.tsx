@@ -92,7 +92,7 @@ function formatRemaining(targetAt?: string) {
   return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
-function actionLabel(action: string, deviceType: string) {
+function actionLabel(action: string) {
   return action === "off" ? "TẮT" : "BẬT";
 }
 
@@ -381,7 +381,7 @@ export function Schedule() {
                     <div className="flex">
                       <div className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold ${schedule.action === "off" ? "border-gray-200 bg-gray-100 text-gray-600" : "border-indigo-100 bg-indigo-50 text-[#6366f1]"}`}>
                         <Power className="h-3.5 w-3.5" />
-                        {actionLabel(schedule.action, schedule.loai_thiet_bi)} - {schedule.thiet_bi_ten}
+                        {actionLabel(schedule.action)} - {schedule.thiet_bi_ten}
                       </div>                      
                     </div>
                   </div>
@@ -475,7 +475,7 @@ export function Schedule() {
                   )}
                   <div className="flex flex-wrap gap-2">
                     <span className={`rounded-lg px-3 py-1.5 text-xs font-bold ${selectedSchedule.action === "off" ? "bg-gray-100 text-gray-600" : "bg-indigo-50 text-[#6366f1]"}`}>
-                      {actionLabel(selectedSchedule.action, selectedSchedule.loai_thiet_bi)}
+                      {actionLabel(selectedSchedule.action)}
                     </span>
                   </div>
                   {selectedSchedule.action === "off" && (

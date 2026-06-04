@@ -110,7 +110,6 @@ const parseJsonResponse = async (response: Response) => {
 
 export function Dashboard() {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
-  const [allSensors, setAllSensors] = useState<SensorData[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [totalDevices, setTotalDevices] = useState(0);
   const [lightsOn, setLightsOn] = useState(0);
@@ -309,7 +308,6 @@ export function Dashboard() {
       
       if (result.data && result.data.length > 0) {
         console.log("Sensors found:", result.data.length, result.data);
-        setAllSensors(result.data);
         // Lấy sensor đầu tiên làm sensor chính
         setSensorData(result.data[0]);
         
