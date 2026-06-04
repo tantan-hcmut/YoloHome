@@ -72,7 +72,7 @@ export function FaceManagement() {
       <div className="bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 mb-1">Quản lý khuôn mặt</h1>
-          <p className="text-sm text-gray-500">Thêm hoặc xóa khuôn mặt được phép đăng nhập YoloHome.</p>
+          <p className="text-sm text-gray-500">Thêm hoặc xóa khuôn mặt được phép đăng nhập YoloHome</p>
         </div>
       </div>
 

@@ -311,7 +311,7 @@ export function Schedule() {
       <div className="mb-6 flex flex-col gap-4 rounded-3xl border border-white/40 bg-white/70 p-6 shadow-xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="mb-1 text-2xl font-bold text-gray-800">Hẹn giờ tự động</h1>
-          <p className="text-sm text-gray-500">Tạo lịch bật/tắt, đổi màu đèn hoặc chỉnh tốc độ quạt theo giờ và đếm ngược.</p>
+          <p className="text-sm text-gray-500">Tạo lịch hẹn bật/tắt, đếm ngược</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.02 }}
@@ -383,7 +383,7 @@ export function Schedule() {
                     </div>
 
                     <div className="flex">
-                      <div className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold ${schedule.action === "off" ? "border-red-200 bg-red-50 text-red-700" : "border-green-200 bg-green-50 text-green-700"}`}>
+                      <div className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold ${schedule.action === "off" ? "border-gray-200 bg-gray-100 text-gray-600" : "border-indigo-100 bg-indigo-50 text-[#6366f1]"}`}>
                         <Power className="h-3.5 w-3.5" />
                         {actionLabel(schedule.action, schedule.loai_thiet_bi)} - {schedule.thiet_bi_ten}
                       </div>                      
@@ -437,7 +437,7 @@ export function Schedule() {
                 </div>
                 <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
                   <span className="font-semibold text-gray-500">Trạng thái lịch</span>
-                  <span className={`font-bold ${selectedSchedule.active ? "text-green-600" : "text-gray-500"}`}>
+                  <span className={`font-bold ${selectedSchedule.active ? "text-[#6366f1]" : "text-gray-500"}`}>
                     {selectedSchedule.active ? "Đang bật" : "Đang tắt"}
                   </span>
                 </div>
@@ -478,7 +478,7 @@ export function Schedule() {
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2">
-                    <span className={`rounded-lg px-3 py-1.5 text-xs font-bold ${selectedSchedule.action === "off" ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+                    <span className={`rounded-lg px-3 py-1.5 text-xs font-bold ${selectedSchedule.action === "off" ? "bg-gray-100 text-gray-600" : "bg-indigo-50 text-[#6366f1]"}`}>
                       {actionLabel(selectedSchedule.action, selectedSchedule.loai_thiet_bi)}
                     </span>
                   </div>

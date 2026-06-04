@@ -28,6 +28,70 @@ interface HistoryItem {
 
 const getDate = (value: string) => new Date(value);
 
+const formatCommandAction = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  const map: Record<string, string> = {
+    on: "Bật",
+    off: "Tắt",
+    auto: "Tự động",
+    fan_auto: "Quạt về tự động",
+    set_rgb: "Đổi màu đèn",
+    light_rgb: "Đổi màu đèn",
+    set_color: "Đổi màu đèn",
+    set_brightness: "Đổi độ sáng đèn",
+    increase_brightness: "Tăng độ sáng đèn",
+    decrease_brightness: "Giảm độ sáng đèn",
+    set_speed: "Đổi tốc độ quạt",
+    fan_speed: "Đổi tốc độ quạt",
+    light_on: "Bật đèn",
+    light_off: "Tắt đèn",
+    fan_on: "Bật quạt",
+    fan_off: "Tắt quạt",
+    all_off: "Tắt tất cả thiết bị",
+  };
+
+  return map[normalized] || value;
+};
+
+const formatDeviceType = (type: string) => {
+  if (type === "den") return "Đèn";
+  if (type === "quat") return "Quạt";
+  if (type === "sensor") return "Cảm biến";
+  return type || "Không xác định";
+};
+
+const formatHistoryAction = (action: string) => {
+  const value = String(action || "").trim();
+  const normalized = value.toLowerCase();
+
+  const exactMap: Record<string, string> = {
+    "tat toan bo thiet bi": "Tắt toàn bộ thiết bị",
+    "cai dat mac dinh thiet bi": "Cài đặt mặc định thiết bị",
+  };
+
+  if (exactMap[normalized]) return exactMap[normalized];
+
+  const controlPrefix = "Điều khiển thiết bị:";
+  if (value.startsWith(controlPrefix)) {
+    const command = value.slice(controlPrefix.length).trim();
+    return `${controlPrefix} ${formatCommandAction(command)}`;
+  }
+
+  const schedulePrefix = "Auto Schedule:";
+  if (value.startsWith(schedulePrefix)) {
+    const command = value.slice(schedulePrefix.length).trim();
+    return `Lịch tự động: ${formatCommandAction(command)}`;
+  }
+
+  const voicePrefix = "Voice Command:";
+  if (value.startsWith(voicePrefix)) {
+    const command = value.slice(voicePrefix.length).trim();
+    return `Lệnh giọng nói: ${command}`;
+  }
+
+  return formatCommandAction(value);
+};
+
 const getDateKey = (value: string | Date) => {
   const date = value instanceof Date ? value : getDate(value);
   const year = date.getFullYear();
@@ -135,7 +199,7 @@ export function History() {
     const headers = ["Thời gian,Thiết bị,Loại,Người thực hiện,Hành động"];
     const rows = filteredHistories.map((h) => {
       const dateStr = getDate(h.thoi_gian).toLocaleString("vi-VN");
-      return `"${dateStr}","${h.ten_thiet_bi}","${h.loai_thiet_bi}","${h.nguoi_dung}","${h.hanh_dong}"`;
+      return `"${dateStr}","${h.ten_thiet_bi}","${formatDeviceType(h.loai_thiet_bi)}","${h.nguoi_dung}","${formatHistoryAction(h.hanh_dong)}"`;
     });
 
     const csvContent = bom + headers.concat(rows).join("\n");
@@ -151,9 +215,15 @@ export function History() {
   };
 
   const getIcon = (type: string) => {
-    if (type === "den") return <Lightbulb className="w-5 h-5 text-yellow-500" />;
-    if (type === "quat") return <Fan className="w-5 h-5 text-blue-500" />;
+    if (type === "den") return <Lightbulb className="w-5 h-5 text-[#6366f1]" />;
+    if (type === "quat") return <Fan className="w-5 h-5 text-cyan-600" />;
     return <Power className="w-5 h-5 text-gray-500" />;
+  };
+
+  const getIconBoxClass = (type: string) => {
+    if (type === "den") return "bg-indigo-50 border-indigo-100";
+    if (type === "quat") return "bg-cyan-50 border-cyan-100";
+    return "bg-gray-100 border-gray-200";
   };
 
   if (loading) {
@@ -176,7 +246,7 @@ export function History() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={exportToExcel}
-            className="px-6 py-3 bg-gradient-to-r from-[#10b981] to-[#059669] text-white rounded-xl hover:shadow-lg transition-all text-sm font-semibold flex items-center gap-2 cursor-pointer"
+            className="px-6 py-3 bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] text-white rounded-xl hover:shadow-lg transition-all text-sm font-semibold flex items-center gap-2 cursor-pointer"
           >
             <Download className="w-4 h-4" />
             Xuất file Excel
@@ -186,7 +256,7 @@ export function History() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg flex items-center gap-5">
-          <div className="w-14 h-14 rounded-full bg-cyan-100 flex items-center justify-center">
+          <div className="w-14 h-14 rounded-full bg-cyan-50 border border-cyan-100 flex items-center justify-center">
             <Activity className="w-6 h-6 text-cyan-600" />
           </div>
           <div>
@@ -196,8 +266,8 @@ export function History() {
         </div>
 
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg flex items-center gap-5">
-          <div className="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center">
-            <Calendar className="w-6 h-6 text-purple-600" />
+          <div className="w-14 h-14 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+            <Calendar className="w-6 h-6 text-[#6366f1]" />
           </div>
           <div>
             <div className="text-sm text-gray-500 font-medium mb-1">7 ngày qua</div>
@@ -206,8 +276,8 @@ export function History() {
         </div>
 
         <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg flex items-center gap-5">
-          <div className="w-14 h-14 rounded-full bg-orange-100 flex items-center justify-center">
-            <Power className="w-6 h-6 text-orange-600" />
+          <div className="w-14 h-14 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center">
+            <Power className="w-6 h-6 text-gray-600" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm text-gray-500 font-medium mb-1">Tương tác nhiều nhất</div>
@@ -298,15 +368,15 @@ export function History() {
                   transition={{ delay: index * 0.02 }}
                   className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-all group"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 ${getIconBoxClass(item.loai_thiet_bi)}`}>
                     {getIcon(item.loai_thiet_bi)}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 mb-1 flex-wrap">
                       <span className="font-semibold text-gray-800">{item.ten_thiet_bi}</span>
-                      <span className="text-sm font-medium px-2 py-0.5 rounded-md bg-gray-200 text-gray-700">
-                        {item.hanh_dong}
+                      <span className="text-sm font-medium px-2 py-0.5 rounded-md bg-indigo-50 text-[#6366f1] border border-indigo-100">
+                        {formatHistoryAction(item.hanh_dong)}
                       </span>
                     </div>
                     <div className="text-sm text-gray-500">

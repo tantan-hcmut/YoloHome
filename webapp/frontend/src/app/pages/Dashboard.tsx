@@ -42,9 +42,9 @@ const resolveModeLabel = (mode?: string) => {
 
 const resolveModeClass = (mode?: string) => {
   const resolved = resolveModeLabel(mode);
-  if (resolved === "AUTO") return "bg-green-100 text-green-700 border-green-200";
-  if (resolved === "FORCE_OFF") return "bg-red-100 text-red-700 border-red-200";
-  if (resolved === "FORCE_ON") return "bg-blue-100 text-blue-700 border-blue-200";
+  if (resolved === "AUTO") return "bg-cyan-50 text-cyan-700 border-cyan-100";
+  if (resolved === "FORCE_OFF") return "bg-gray-100 text-gray-600 border-gray-200";
+  if (resolved === "FORCE_ON") return "bg-indigo-50 text-[#6366f1] border-indigo-100";
   return "bg-gray-100 text-gray-600 border-gray-200";
 };
 
@@ -53,12 +53,12 @@ const resolveActualState = (temp?: number, humidity?: number) => {
     return { label: "Chưa có dữ liệu", detail: "Đang chờ cảm biến", className: "bg-gray-100 text-gray-600" };
   }
   if ((temp ?? 0) > 32 || (humidity ?? 0) > 80) {
-    return { label: "Ngưỡng cao", detail: "Nhiệt độ/độ ẩm vượt ngưỡng", className: "bg-red-100 text-red-700" };
+    return { label: "Ngưỡng cao", detail: "Nhiệt độ/độ ẩm vượt ngưỡng", className: "bg-indigo-50 text-[#6366f1]" };
   }
   if ((temp ?? 100) < 24 || (humidity ?? 100) < 30) {
     return { label: "Ngưỡng thấp", detail: "Nhiệt độ/độ ẩm thấp", className: "bg-amber-100 text-amber-700" };
   }
-  return { label: "Ổn định", detail: "Thông số trong ngưỡng", className: "bg-green-100 text-green-700" };
+  return { label: "Ổn định", detail: "Thông số trong ngưỡng", className: "bg-cyan-50 text-cyan-700" };
 };
 
 const resolveAiState = (runtime: RuntimeState | null) => {
@@ -66,9 +66,9 @@ const resolveAiState = (runtime: RuntimeState | null) => {
     return { label: "Chưa có dữ liệu", detail: "Đang chờ telemetry", className: "bg-gray-100 text-gray-600" };
   }
   if (runtime.tinymlHot) {
-    return { label: "AI: Nóng", detail: "AI yêu cầu làm mát", className: "bg-red-100 text-red-700" };
+    return { label: "AI: Nóng", detail: "AI yêu cầu làm mát", className: "bg-indigo-50 text-[#6366f1]" };
   }
-  return { label: "AI: Bình thường", detail: "AI chưa yêu cầu làm mát", className: "bg-green-100 text-green-700" };
+  return { label: "AI: Bình thường", detail: "AI chưa yêu cầu làm mát", className: "bg-cyan-50 text-cyan-700" };
 };
 
 export function Dashboard() {
@@ -278,7 +278,7 @@ export function Dashboard() {
             <div className="w-12 h-12 bg-gradient-to-br from-[#22d3ee] to-[#06b6d4] rounded-xl flex items-center justify-center">
               <Power className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xs font-semibold px-3 py-1 bg-green-100 text-green-700 rounded-full">Tổng</span>
+            <span className="text-xs font-semibold px-3 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 rounded-full">Tổng</span>
           </div>
           <div className="text-3xl font-bold text-gray-800 mb-1">{totalDevices}</div>
           <div className="text-sm text-gray-500">Tổng thiết bị</div>
@@ -294,7 +294,7 @@ export function Dashboard() {
             <div className="w-12 h-12 bg-gradient-to-br from-[#6366f1] to-[#8b5cf6] rounded-xl flex items-center justify-center">
               <Lightbulb className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xs font-semibold px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full">Đang bật</span>
+            <span className="text-xs font-semibold px-3 py-1 bg-indigo-50 text-[#6366f1] border border-indigo-100 rounded-full">Đang bật</span>
           </div>
           <div className="text-3xl font-bold text-gray-800 mb-1">{lightsOn}</div>
           <div className="text-sm text-gray-500">Đèn đang bật</div>
@@ -310,7 +310,7 @@ export function Dashboard() {
             <div className="w-12 h-12 bg-gradient-to-br from-[#22d3ee] to-[#06b6d4] rounded-xl flex items-center justify-center">
               <Fan className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xs font-semibold px-3 py-1 bg-blue-100 text-blue-700 rounded-full">Đang bật</span>
+            <span className="text-xs font-semibold px-3 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 rounded-full">Đang bật</span>
           </div>
           <div className="text-3xl font-bold text-gray-800 mb-1">{fansOn}</div>
           <div className="text-sm text-gray-500">Quạt đang bật</div>
