@@ -463,7 +463,7 @@ export function Dashboard() {
                 <Thermometer className="w-6 h-6 text-cyan-600" />
               </div>
               <div>
-                <div className="text-sm text-gray-500 font-medium mb-1">State theo ngưỡng thực tế</div>
+                <div className="text-sm text-gray-500 font-medium mb-1">Trạng thái theo ngưỡng thực tế - Nhiệt độ / Độ ẩm</div>
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-lg font-bold text-gray-800">
                   <span>{actualState.label}</span>
                   <span className="text-lg text-gray-500">-</span>
@@ -489,7 +489,7 @@ export function Dashboard() {
                 <BrainCircuit className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <div className="text-sm text-gray-500 font-medium mb-1">State theo AI</div>
+                <div className="text-sm text-gray-500 font-medium mb-1">Trạng thái theo AI</div>
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-lg font-bold text-gray-800">
                   <span>{aiState.label}</span>
                   <span className="text-lg text-gray-500">-</span>
