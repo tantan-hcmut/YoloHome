@@ -109,6 +109,10 @@ def extract_voice_percent(text):
 
 def is_all_off_voice_command(text):
     return voice_has_any(text, [
+        'toi di ra khoi nha',
+        'toi ra khoi nha',
+        'di ra khoi nha',
+        'ra khoi nha',
         'tat tat ca',
         'tat het',
         'tat toan bo',
@@ -219,6 +223,20 @@ def receive_voice_command():
         action = data.get('action') or ''
         device_name = data.get('device') or ''
         voice_percent = extract_voice_percent(normalized_text)
+        is_voice_source = data.get('source') == 'voice' or bool(data.get('requires_voice_active'))
+
+        if action in ['fan_on', 'fan_off', 'fan_auto', 'fan_speed']:
+            device_name = 'fan'
+        elif action in ['light_on', 'light_off', 'light_rgb']:
+            device_name = 'light'
+
+        def send_voice_active_if_needed():
+            if is_voice_source:
+                return send_command_to_adafruit({
+                    'action': 'voice_active',
+                    'source': 'voice'
+                }, 'voice')
+            return None
 
         if is_all_off_voice_command(normalized_text):
             action = 'all_off'
@@ -263,11 +281,12 @@ def receive_voice_command():
         if action == 'all_off' or device_name == 'all':
             devices = ThietBi.query.filter(ThietBi.loai_thiet_bi.in_(['den', 'quat'])).all()
             adafruit_commands = []
+            send_voice_active_if_needed()
 
             for device in devices:
                 cmd_payload = {
                     'action': 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off',
-                    'source': 'webapp'
+                    'source': 'voice' if is_voice_source else 'webapp'
                 }
                 adafruit_response = send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
                 adafruit_commands.append({
@@ -345,15 +364,47 @@ def receive_voice_command():
             else:
                 brightness_value = clamp_brightness(current_brightness - brightness_delta, current_brightness)
 
-        if color_rgb and device_type == 'den' and action != 'off':
+        command_source = 'voice' if is_voice_source else 'webapp'
+
+        if color_rgb and device_type == 'den' and action not in ['off', 'light_off', 'light_rgb']:
             action = 'set_color'
-        elif device_type == 'den' and data.get('brightness') is not None and action not in ['off', 'increase_brightness', 'decrease_brightness']:
+        elif device_type == 'den' and data.get('brightness') is not None and action not in ['off', 'light_off', 'light_rgb', 'increase_brightness', 'decrease_brightness']:
             action = 'set_brightness'
-        elif device_type == 'quat' and data.get('speed') is not None and action != 'off':
+        elif device_type == 'quat' and data.get('speed') is not None and action not in ['off', 'fan_off', 'fan_auto', 'fan_speed']:
             action = 'set_speed'
 
-        cmd_payload = {'source': 'webapp'}
-        if action == 'set_color':
+        cmd_payload = {'source': command_source}
+        if action in ['fan_on', 'fan_off', 'fan_auto']:
+            if device_type != 'quat':
+                return jsonify({'error': 'Lenh quat chi ho tro thiet bi quat', 'id': command.id}), 400
+            cmd_payload['action'] = action
+        elif action in ['fan_speed', 'set_speed'] and device_type == 'quat':
+            cmd_payload.update({
+                'action': 'fan_speed',
+                'speed': speed_value
+            })
+        elif action in ['light_on', 'light_off']:
+            if device_type != 'den':
+                return jsonify({'error': 'Lenh den chi ho tro thiet bi den', 'id': command.id}), 400
+            cmd_payload['action'] = action
+        elif action == 'light_rgb':
+            if device_type != 'den':
+                return jsonify({'error': 'Lenh doi mau chi ho tro den', 'id': command.id}), 400
+
+            r = clamp_int(data.get('r'), current_r, 0, 255)
+            g = clamp_int(data.get('g'), current_g, 0, 255)
+            b = clamp_int(data.get('b'), current_b, 0, 255)
+            if color_rgb:
+                r, g, b = color_rgb
+            cmd_payload = build_light_rgb_payload(
+                r,
+                g,
+                b,
+                source=command_source,
+                brightness=brightness_value
+            )
+            color_rgb = (r, g, b)
+        elif action == 'set_color':
             if device_type != 'den':
                 return jsonify({'error': 'Lenh doi mau chi ho tro den', 'id': command.id}), 400
             if not color_rgb:
@@ -364,7 +415,7 @@ def receive_voice_command():
                 r,
                 g,
                 b,
-                source='webapp',
+                source=command_source,
                 brightness=brightness_value
             )
         elif action == 'set_brightness' and device_type == 'den':
@@ -372,7 +423,7 @@ def receive_voice_command():
                 current_r,
                 current_g,
                 current_b,
-                source='webapp',
+                source=command_source,
                 brightness=brightness_value
             )
         elif action in ['increase_brightness', 'decrease_brightness'] and device_type == 'den':
@@ -380,14 +431,9 @@ def receive_voice_command():
                 current_r,
                 current_g,
                 current_b,
-                source='webapp',
+                source=command_source,
                 brightness=brightness_value
             )
-        elif action == 'set_speed' and device_type == 'quat':
-            cmd_payload.update({
-                'action': 'fan_speed',
-                'speed': speed_value
-            })
         else:
             should_turn_on = action in ['on', 'increase_speed']
             if device_type == 'den':
@@ -395,10 +441,11 @@ def receive_voice_command():
             else:
                 cmd_payload['action'] = 'fan_on' if should_turn_on else 'fan_off'
             
+        send_voice_active_if_needed()
         adafruit_response = send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
 
         # Cập nhật trạng thái và ghi log Lịch sử hoạt động
-        if action == 'set_color':
+        if action in ['set_color', 'light_rgb']:
             r, g, b = color_rgb
             state.trang_thai_bat_tat = True
             state.mau_sac = json.dumps({
@@ -423,9 +470,11 @@ def receive_voice_command():
                 'b': current_b,
                 'brightness': brightness_value
             }, ensure_ascii=False, separators=(',', ':'))
-        elif action == 'set_speed' and device_type == 'quat':
+        elif action in ['set_speed', 'fan_speed'] and device_type == 'quat':
             state.trang_thai_bat_tat = True
             state.toc_do = speed_value
+        elif action == 'fan_auto' and device_type == 'quat':
+            pass
         else:
             state.trang_thai_bat_tat = (cmd_payload['action'] in ['light_on', 'fan_on'])
             if cmd_payload['action'] == 'fan_off':
@@ -444,8 +493,8 @@ def receive_voice_command():
                     'g': color_rgb[1],
                     'b': color_rgb[2]
                 } if color_rgb else None,
-                'brightness': brightness_value if action in ['set_color', 'set_brightness', 'increase_brightness', 'decrease_brightness'] else None,
-                'speed': speed_value if action == 'set_speed' else None,
+                'brightness': brightness_value if action in ['set_color', 'light_rgb', 'set_brightness', 'increase_brightness', 'decrease_brightness'] else None,
+                'speed': speed_value if action in ['set_speed', 'fan_speed'] else None,
                 'adafruit_command': cmd_payload
             }, ensure_ascii=False)
         )
@@ -459,12 +508,12 @@ def receive_voice_command():
                 'g': color_rgb[1],
                 'b': color_rgb[2]
             } if color_rgb else None,
-            'brightness': brightness_value if action in ['set_color', 'set_brightness', 'increase_brightness', 'decrease_brightness'] else None,
+            'brightness': brightness_value if action in ['set_color', 'light_rgb', 'set_brightness', 'increase_brightness', 'decrease_brightness'] else None,
             'adafruit_command': cmd_payload,
             'adafruit_success': adafruit_response.get('success', False)
         }, ensure_ascii=False)
         command.action = action
-        command.speed = str(speed_value) if action == 'set_speed' else command.speed
+        command.speed = str(speed_value) if action in ['set_speed', 'fan_speed'] else command.speed
         command.status = 'processed'
         command.processed_at = datetime.utcnow()
         db.session.commit()

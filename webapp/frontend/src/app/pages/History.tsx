@@ -7,11 +7,11 @@ import {
   Fan,
   Filter,
   Lightbulb,
-  Loader2,
   Power,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
+import { PageLoading } from "../components/PageLoading";
 
 const API_BASE_URL = "http://localhost:5000";
 const ITEMS_PER_PAGE = 10;
@@ -67,6 +67,7 @@ const formatHistoryAction = (action: string) => {
   const exactMap: Record<string, string> = {
     "tat toan bo thiet bi": "Tắt toàn bộ thiết bị",
     "cai dat mac dinh thiet bi": "Cài đặt mặc định thiết bị",
+    "timeout: quat ve che do auto": "Timeout: Quạt về chế độ AUTO",
   };
 
   if (exactMap[normalized]) return exactMap[normalized];
@@ -227,11 +228,7 @@ export function History() {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center p-20">
-        <Loader2 className="animate-spin text-[#6366f1] w-8 h-8" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return (
@@ -301,7 +298,7 @@ export function History() {
                 setSelectedDate(e.target.value);
                 if (e.target.value !== "all") setExactDate("");
               }}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-sm bg-white"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-sm bg-white cursor-pointer"
             >
               <option value="all">Tất cả thời gian</option>
               <option value="today">Hôm nay</option>
@@ -318,7 +315,7 @@ export function History() {
                 setExactDate(e.target.value);
                 if (e.target.value) setSelectedDate("all");
               }}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-sm bg-white"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-sm bg-white cursor-pointer"
             />
           </div>
 
@@ -327,7 +324,7 @@ export function History() {
             <select
               value={selectedDevice}
               onChange={(e) => setSelectedDevice(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-sm bg-white"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-sm bg-white cursor-pointer"
             >
               <option value="all">Tất cả thiết bị</option>
               <option value="den">Đèn</option>

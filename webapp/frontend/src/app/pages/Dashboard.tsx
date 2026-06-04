@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Thermometer, Droplets, Power, Lightbulb, Fan, BrainCircuit, Gauge } from "lucide-react";
+import { Thermometer, Droplets, Power, Lightbulb, Fan, BrainCircuit, Gauge, Clock, Loader, RotateCcw } from "lucide-react";
 import { motion } from "motion/react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { PageLoading } from "../components/PageLoading";
 
 const API_BASE_URL = "http://localhost:5000";
 
@@ -26,6 +27,12 @@ interface RuntimeState {
   humidity?: number;
   aiCoolingElapsedMs?: number;
   aiTargetFanSpeedPercent?: number;
+}
+
+interface FanAutoTimeoutState {
+  active: boolean;
+  expires_at: string | null;
+  remaining_seconds: number;
 }
 
 const getSensorTimestamp = (item: any) =>
@@ -71,6 +78,36 @@ const resolveAiState = (runtime: RuntimeState | null) => {
   return { label: "AI: Bình thường", detail: "AI chưa yêu cầu làm mát", className: "bg-cyan-50 text-cyan-700" };
 };
 
+const formatRemainingTime = (seconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const secs = safeSeconds % 60;
+
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+};
+
+const parseJsonResponse = async (response: Response) => {
+  const contentType = response.headers.get("content-type") || "";
+  const rawText = await response.text();
+
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      response.status === 404
+        ? "Backend chua cap nhat chuc nang timeout. Hay restart backend roi thu lai."
+        : `Backend tra ve ${response.status} ${response.statusText}. Hay kiem tra backend roi thu lai.`
+    );
+  }
+
+  try {
+    return rawText ? JSON.parse(rawText) : {};
+  } catch {
+    throw new Error("Backend tra ve du lieu khong hop le.");
+  }
+};
+
 export function Dashboard() {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [allSensors, setAllSensors] = useState<SensorData[]>([]);
@@ -79,6 +116,10 @@ export function Dashboard() {
   const [lightsOn, setLightsOn] = useState(0);
   const [fansOn, setFansOn] = useState(0);
   const [runtimeState, setRuntimeState] = useState<RuntimeState | null>(null);
+  const [fanAutoTimeout, setFanAutoTimeout] = useState<FanAutoTimeoutState | null>(null);
+  const [fanAutoTimeoutRemainingSeconds, setFanAutoTimeoutRemainingSeconds] = useState(0);
+  const [fanAutoTimeoutMinutes, setFanAutoTimeoutMinutes] = useState(30);
+  const [fanAutoTimeoutLoading, setFanAutoTimeoutLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -86,14 +127,45 @@ export function Dashboard() {
     fetchSensorData();
     fetchDeviceStats();
     fetchRuntimeState();
+    fetchFanAutoTimeout();
     // Poll every 5 seconds for real-time updates
     const interval = setInterval(() => {
       fetchSensorData();
       fetchDeviceStats();
       fetchRuntimeState();
+      fetchFanAutoTimeout();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const updateRemainingTime = () => {
+      if (!fanAutoTimeout?.active || !fanAutoTimeout.expires_at) {
+        setFanAutoTimeoutRemainingSeconds(0);
+        return;
+      }
+
+      const expiresAtMs = new Date(fanAutoTimeout.expires_at).getTime();
+      if (Number.isNaN(expiresAtMs)) {
+        setFanAutoTimeoutRemainingSeconds(Math.max(0, fanAutoTimeout.remaining_seconds || 0));
+        return;
+      }
+
+      const nextRemainingSeconds = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
+      setFanAutoTimeoutRemainingSeconds(nextRemainingSeconds);
+
+      if (nextRemainingSeconds === 0) {
+        setRuntimeState((current) => ({ ...(current || {}), overrideModeText: "AUTO" }));
+        setFanAutoTimeout((current) =>
+          current?.active ? { ...current, active: false, remaining_seconds: 0 } : current
+        );
+      }
+    };
+
+    updateRemainingTime();
+    const countdownInterval = setInterval(updateRemainingTime, 1000);
+    return () => clearInterval(countdownInterval);
+  }, [fanAutoTimeout?.active, fanAutoTimeout?.expires_at, fanAutoTimeout?.remaining_seconds]);
 
   const fetchDeviceStats = async () => {
     try {
@@ -144,6 +216,76 @@ export function Dashboard() {
       setRuntimeState(result.data || null);
     } catch (err) {
       console.error("Error fetching runtime state:", err);
+    }
+  };
+
+  const fetchFanAutoTimeout = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/api/thiet-bi/fan-auto-timeout`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) return;
+
+      const result = await parseJsonResponse(response);
+      setFanAutoTimeout(result.data || null);
+    } catch (err) {
+      console.error("Error fetching fan auto timeout:", err);
+    }
+  };
+
+  const scheduleFanAutoTimeout = async () => {
+    setFanAutoTimeoutLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/api/thiet-bi/fan-auto-timeout`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ minutes: fanAutoTimeoutMinutes })
+      });
+
+      const result = await parseJsonResponse(response);
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to schedule fan auto timeout");
+      }
+
+      setFanAutoTimeout(result.data || null);
+    } catch (err) {
+      console.error("Error scheduling fan auto timeout:", err);
+    } finally {
+      setFanAutoTimeoutLoading(false);
+    }
+  };
+
+  const cancelFanAutoTimeout = async () => {
+    setFanAutoTimeoutLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/api/thiet-bi/fan-auto-timeout`, {
+        method: "DELETE",
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await parseJsonResponse(response);
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to cancel fan auto timeout");
+      }
+
+      setFanAutoTimeout(result.data || null);
+    } catch (err) {
+      console.error("Error canceling fan auto timeout:", err);
+    } finally {
+      setFanAutoTimeoutLoading(false);
     }
   };
 
@@ -231,14 +373,7 @@ export function Dashboard() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[#6366f1] border-t-transparent"></div>
-          <p className="mt-4 text-gray-600">Đang tải dữ liệu...</p>
-        </div>
-      </div>
-    );
+    return <PageLoading />;
   }
 
   const rooms = [
@@ -373,6 +508,64 @@ export function Dashboard() {
           </div>
         </motion.div>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.29 }}
+        className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg mb-6"
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
+              <Clock className="w-6 h-6 text-[#6366f1]" />
+            </div>
+            <div>
+              <div className="text-sm text-gray-500 font-medium mb-1">Timeout về chế độ AUTO</div>
+              <div className="min-h-[28px] text-lg font-bold text-gray-800">
+                {fanAutoTimeout?.active
+                  ? <span className="tabular-nums">Còn lại {formatRemainingTime(fanAutoTimeoutRemainingSeconds)}</span>
+                  : "Chưa đặt timeout"}
+              </div>
+              <div className="text-xs text-gray-500">
+                Khi hết thời gian, hệ thống sẽ tự động chuyển về chế độ AUTO có AI điều khiển.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <span>Phút</span>
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={fanAutoTimeoutMinutes}
+                onChange={(event) => setFanAutoTimeoutMinutes(Math.max(1, Math.min(1440, Number(event.target.value) || 1)))}
+                className="w-24 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-sm font-bold text-gray-800 outline-none focus:border-[#6366f1] focus:ring-4 focus:ring-indigo-100"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={scheduleFanAutoTimeout}
+              disabled={fanAutoTimeoutLoading}
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#6366f1] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-[#5558e8] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {fanAutoTimeoutLoading ? <Loader className="w-4 h-4 animate-spin" /> : <Clock className="w-4 h-4" />}
+              Đặt timeout
+            </button>
+            <button
+              type="button"
+              onClick={cancelFanAutoTimeout}
+              disabled={fanAutoTimeoutLoading || !fanAutoTimeout?.active}
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-600 transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Hủy
+            </button>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Temperature & Humidity Chart */}
       <motion.div

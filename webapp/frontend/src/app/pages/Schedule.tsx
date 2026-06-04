@@ -4,7 +4,6 @@ import {
   Clock,
   Eye,
   Fan,
-  Loader2,
   Palette,
   Plus,
   Power,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
+import { PageLoading } from "../components/PageLoading";
 
 const API_BASE_URL = "http://localhost:5000";
 
@@ -299,11 +299,7 @@ export function Schedule() {
   }, [lightColor, brightness]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center p-20">
-        <Loader2 className="h-8 w-8 animate-spin text-[#6366f1]" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return (
@@ -656,7 +652,7 @@ export function Schedule() {
                     </div>
                     <div>
                       <div className="mb-2 flex justify-between text-xs font-bold uppercase tracking-wide text-gray-400">
-                        <span>Preview</span>
+                        <span>Xem trước</span>
                         <span>{formColorPreview.toUpperCase()}</span>
                       </div>
                       <div

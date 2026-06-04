@@ -5,6 +5,7 @@ interface FaceCameraProps {
   onCapture: (image: string) => void;
   captureLabel?: string;
   disabled?: boolean;
+  className?: string;
   autoCaptureKey?: string;
   autoCaptureDelayMs?: number;
   hideCaptureButton?: boolean;
@@ -15,6 +16,7 @@ export function FaceCamera({
   onCapture,
   captureLabel = "Chụp ảnh",
   disabled = false,
+  className = "",
   autoCaptureKey,
   autoCaptureDelayMs = 1600,
   hideCaptureButton = false,
@@ -77,7 +79,7 @@ export function FaceCamera({
   }, [autoCaptureDelayMs, autoCaptureKey, cameraError, disabled, isReady]);
 
   return (
-    <div className="space-y-3">
+    <div className={`space-y-3 ${className}`}>
       <div className="relative aspect-video overflow-hidden rounded-2xl bg-gray-900 shadow-inner">
         {cameraError ? (
           <div className="flex h-full items-center justify-center p-4 text-center text-sm font-medium text-white">
@@ -111,7 +113,7 @@ export function FaceCamera({
           type="button"
           onClick={capture}
           disabled={disabled || Boolean(cameraError) || !isReady}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg disabled:opacity-60"
+          className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Camera className="h-5 w-5" />
           {captureLabel}

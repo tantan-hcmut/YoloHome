@@ -1,6 +1,7 @@
 import { Lightbulb, Fan, Loader, PowerOff, RotateCcw, Settings } from "lucide-react";
 import { motion } from "motion/react";
 import { useState, useEffect, useRef } from "react";
+import { PageLoading } from "../components/PageLoading";
 
 interface Device {
   id: string;
@@ -532,11 +533,7 @@ export function Devices() {
   const fans = devices.filter((d) => d.loai_thiet_bi === "quat");
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader className="animate-spin text-indigo-600" size={40} />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return (

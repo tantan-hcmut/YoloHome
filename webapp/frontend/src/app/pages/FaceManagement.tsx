@@ -67,21 +67,24 @@ export function FaceManagement() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="max-w-[1400px] mx-auto">
       {/* Header */}
       <div className="bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 mb-1">Quản lý khuôn mặt</h1>
           <p className="text-sm text-gray-500">Thêm hoặc xóa khuôn mặt được phép đăng nhập YoloHome</p>
         </div>
+        {(error || message) && (
+          <div className = {`mt-4 inline-flex w-fit max-w-full self-start rounded-xl border p-4 text-sm font-semibold 
+            ${error
+              ? "bg-red-50 text-red-600 border border-red-100"
+              : "border-indigo-100 bg-indigo-50 text-[#6366f1]"
+            }`}
+          >            
+            {error || message}
+          </div>
+        )}
       </div>
-
-
-      {(error || message) && (
-        <div className={`rounded-xl border p-4 text-sm font-semibold ${error ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-          {error || message}
-        </div>
-      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <section className="rounded-2xl border border-white/40 bg-white/80 p-6 shadow-lg backdrop-blur-xl">
@@ -115,7 +118,7 @@ export function FaceManagement() {
                         <button
                           type="button"
                           onClick={() => handleDeleteFace(face)}
-                          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+                          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 cursor-pointer"
                         >
                           <Trash2 className="h-4 w-4" />
                           Xóa
@@ -143,8 +146,13 @@ export function FaceManagement() {
             className="mb-4 w-full rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-[#6366f1] focus:bg-white focus:ring-2 focus:ring-[#6366f1]/20"
           />
 
-          <FaceCamera onCapture={setImage} captureLabel={image ? "Chụp lại" : "Chụp khuôn mặt"} disabled={loading} />
-
+          <FaceCamera
+            onCapture={setImage}
+            captureLabel={image ? "Chụp lại" : "Chụp khuôn mặt"}
+            disabled={loading}
+            className="cursor-pointer"
+          />
+          
           {image && (
             <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
               <img src={image} alt="Ảnh khuôn mặt đã chụp" className="aspect-video w-full object-cover" />
@@ -155,7 +163,7 @@ export function FaceManagement() {
             type="button"
             onClick={handleAddFace}
             disabled={loading}
-            className="mt-5 w-full rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg disabled:opacity-60"
+            className="mt-5 w-full rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-4 py-3 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg disabled:opacity-60 cursor-pointer"
           >
             {loading ? "Đang thêm khuôn mặt..." : "Thêm khuôn mặt"}
           </button>

@@ -2,6 +2,7 @@ import { User, Mail, LogOut, Loader2, CheckCircle2, AlertCircle } from "lucide-r
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
+import { PageLoading } from "../components/PageLoading";
 
 const API_BASE_URL = "http://localhost:5000";
 
@@ -98,11 +99,7 @@ export function Settings() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="animate-spin text-[#6366f1]" size={40} />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return (

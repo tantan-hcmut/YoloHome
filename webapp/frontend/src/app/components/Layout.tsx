@@ -80,12 +80,32 @@ const parseBrightnessPercent = (text: string): number | null => {
 
 const isAllDevicesCommand = (text: string) =>
   hasAny(text, [
+    "toi di ra khoi nha",
+    "toi ra khoi nha",
+    "di ra khoi nha",
+    "ra khoi nha",
     "tat tat ca",
     "tat het",
     "tat toan bo",
     "tat moi thiet bi",
     "tat tat ca thiet bi",
     "tat het thiet bi",
+  ]);
+
+const isFanAutoCommand = (text: string) =>
+  hasAny(text, [
+    "quat auto",
+    "quat tu dong",
+    "che do auto",
+    "che do tu dong",
+    "chuyen ve auto",
+    "chuyen ve tu dong",
+    "ve auto",
+    "ve tu dong",
+    "tra ve auto",
+    "tra ve tu dong",
+    "ai dieu khien",
+    "ai theo doi",
   ]);
 
 const buildVoiceCommand = (text: string): any => {
@@ -118,20 +138,42 @@ const buildVoiceCommand = (text: string): any => {
 
   let action = "";
   if (allDevices) action = "all_off";
+  else if (device === "fan" && isFanAutoCommand(normalizedText)) action = "fan_auto";
   else if (device === "light" && hasAny(normalizedText, ["tang do sang", "tang sang", "sang hon"])) action = "increase_brightness";
   else if (device === "light" && hasAny(normalizedText, ["giam do sang", "giam sang", "toi hon"])) action = "decrease_brightness";
-  else if (hasAny(normalizedText, ["tat", "dong"])) action = "off";
-  else if (device === "light" && color) action = "set_color";
-  else if (device === "light" && brightness !== null) action = "set_brightness";
-  else if (device === "fan" && speed !== null) action = "set_speed";
+  else if (hasAny(normalizedText, ["tat", "dong"])) action = device === "fan" ? "fan_off" : device === "light" ? "light_off" : "off";
+  else if (device === "light" && (color || brightness !== null)) action = "light_rgb";
+  else if (device === "fan" && speed !== null) action = "fan_speed";
   else if (hasAny(normalizedText, ["tang toc", "tang toc do"])) action = "increase_speed";
   else if (hasAny(normalizedText, ["giam toc", "giam toc do"])) action = "decrease_speed";
-  else if (hasAny(normalizedText, ["bat", "mo"])) action = "on";
+  else if (hasAny(normalizedText, ["bat", "mo"])) action = device === "fan" ? "fan_on" : device === "light" ? "light_on" : "on";
 
-  const result: any = { action, device, room, original_text: text };
+  const result: any = {
+    action,
+    device,
+    room,
+    source: "voice",
+    requires_voice_active: true,
+    original_text: text
+  };
   if (speed !== null) result.speed = speed;
   if (color !== null) result.color = color;
   if (brightness !== null) result.brightness = brightness;
+  if (action === "light_rgb") {
+    const rgbByColor: Record<string, { r: number; g: number; b: number }> = {
+      blue: { r: 0, g: 0, b: 255 },
+      green: { r: 0, g: 255, b: 0 },
+      red: { r: 255, g: 0, b: 0 },
+      yellow: { r: 255, g: 255, b: 0 },
+      purple: { r: 128, g: 0, b: 128 },
+      orange: { r: 255, g: 165, b: 0 },
+      pink: { r: 255, g: 105, b: 180 },
+      white: { r: 255, g: 255, b: 255 },
+      gray: { r: 31, g: 31, b: 31 },
+      cyan: { r: 0, g: 255, b: 255 },
+    };
+    Object.assign(result, rgbByColor[color || "white"]);
+  }
   if (action === "increase_brightness" || action === "decrease_brightness") {
     result.brightness_delta = brightness ?? (action === "decrease_brightness" ? 30 : 10);
   }

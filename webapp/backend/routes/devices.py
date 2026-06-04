@@ -1,12 +1,16 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from models import db, ThietBi, Nha, TrangThaiThietBi, LichSuHoatDong
 from utils.security import require_auth
 import requests
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import threading
 
 devices_bp = Blueprint('devices', __name__, url_prefix='/api/thiet-bi')
+FAN_AUTO_TIMEOUT_TIMER = None
+FAN_AUTO_TIMEOUT_EXPIRES_AT = None
+FAN_AUTO_TIMEOUT_LOCK = threading.Lock()
 
 
 def get_or_create_device_state(thiet_bi_id):
@@ -22,6 +26,59 @@ def clamp_brightness(value):
         return max(0, min(100, int(value)))
     except (TypeError, ValueError):
         return 96
+
+
+def send_fan_auto_command(device, debug=True):
+    return send_command_to_adafruit({
+        'action': 'fan_auto',
+        'source': 'webapp'
+    }, device.loai_thiet_bi, debug=debug)
+
+
+def _clear_fan_auto_timeout_locked():
+    global FAN_AUTO_TIMEOUT_TIMER, FAN_AUTO_TIMEOUT_EXPIRES_AT
+    if FAN_AUTO_TIMEOUT_TIMER:
+        FAN_AUTO_TIMEOUT_TIMER.cancel()
+    FAN_AUTO_TIMEOUT_TIMER = None
+    FAN_AUTO_TIMEOUT_EXPIRES_AT = None
+
+
+def _serialize_fan_auto_timeout():
+    if not FAN_AUTO_TIMEOUT_EXPIRES_AT:
+        return {
+            'active': False,
+            'expires_at': None,
+            'remaining_seconds': 0
+        }
+
+    remaining_seconds = max(0, int((FAN_AUTO_TIMEOUT_EXPIRES_AT - datetime.now(timezone.utc)).total_seconds()))
+    return {
+        'active': remaining_seconds > 0,
+        'expires_at': FAN_AUTO_TIMEOUT_EXPIRES_AT.isoformat(),
+        'remaining_seconds': remaining_seconds
+    }
+
+
+def _execute_fan_auto_timeout(app):
+    global FAN_AUTO_TIMEOUT_TIMER, FAN_AUTO_TIMEOUT_EXPIRES_AT
+    with app.app_context():
+        try:
+            fan = ThietBi.query.filter_by(loai_thiet_bi='quat').first()
+            if not fan:
+                return
+
+            response = send_fan_auto_command(fan, debug=False)
+            if not response.get('success'):
+                print(f"[FanTimeout] Failed to send fan_auto: {response.get('message')}")
+                return
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"[FanTimeout] Error: {e}")
+        finally:
+            with FAN_AUTO_TIMEOUT_LOCK:
+                FAN_AUTO_TIMEOUT_TIMER = None
+                FAN_AUTO_TIMEOUT_EXPIRES_AT = None
 
 
 @devices_bp.route('', methods=['POST'])
@@ -143,6 +200,64 @@ def get_all_thiet_bi():
     } for x in objs]), 200
 
 
+@devices_bp.route('/fan-auto-timeout', methods=['GET'])
+@require_auth
+def get_fan_auto_timeout():
+    with FAN_AUTO_TIMEOUT_LOCK:
+        return jsonify({
+            'status': 'success',
+            'data': _serialize_fan_auto_timeout()
+        }), 200
+
+
+@devices_bp.route('/fan-auto-timeout', methods=['POST'])
+@require_auth
+def schedule_fan_auto_timeout():
+    global FAN_AUTO_TIMEOUT_TIMER, FAN_AUTO_TIMEOUT_EXPIRES_AT
+    payload = request.get_json() or {}
+    minutes = payload.get('minutes')
+
+    try:
+        minutes = int(minutes)
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'Timeout phải là số phút phù hợp'}), 400
+
+    if minutes < 1 or minutes > 1440:
+        return jsonify({'status': 'error', 'message': 'Timeout phải từ 1 đến 1440 phút'}), 400
+
+    fan = ThietBi.query.filter_by(loai_thiet_bi='quat').first()
+    if not fan:
+        return jsonify({'status': 'error', 'message': 'Không tìm thấy quạt'}), 404
+
+    app = current_app._get_current_object()
+    with FAN_AUTO_TIMEOUT_LOCK:
+        _clear_fan_auto_timeout_locked()
+        FAN_AUTO_TIMEOUT_EXPIRES_AT = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        FAN_AUTO_TIMEOUT_TIMER = threading.Timer(minutes * 60, _execute_fan_auto_timeout, args=(app,))
+        FAN_AUTO_TIMEOUT_TIMER.daemon = True
+        FAN_AUTO_TIMEOUT_TIMER.start()
+        timeout_data = _serialize_fan_auto_timeout()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Đã đặt timeout {minutes} phút trở về chế độ AUTO',
+        'data': timeout_data
+    }), 200
+
+
+@devices_bp.route('/fan-auto-timeout', methods=['DELETE'])
+@require_auth
+def cancel_fan_auto_timeout():
+    with FAN_AUTO_TIMEOUT_LOCK:
+        _clear_fan_auto_timeout_locked()
+
+    return jsonify({
+        'status': 'success',
+        'message': 'Đã hủy timeout trở về chế độ AUTO',
+        'data': _serialize_fan_auto_timeout()
+    }), 200
+
+
 @devices_bp.route('/<thiet_bi_id>', methods=['GET'])
 @require_auth
 def get_thiet_bi_detail(thiet_bi_id):
@@ -249,7 +364,10 @@ def control_thiet_bi(thiet_bi_id):
             command['speed'] = payload.get('speed', 50)
         
         # Gửi tới Adafruit REST API (truyền device type để biết send tới feed nào)
-        response = send_command_to_adafruit(command, device.loai_thiet_bi)
+        if command.get('action') == 'fan_auto' and device.loai_thiet_bi == 'quat':
+            response = send_fan_auto_command(device)
+        else:
+            response = send_command_to_adafruit(command, device.loai_thiet_bi)
         
         if not response['success']:
             return jsonify({'status': 'error', 'message': response['message']}), 500
@@ -445,7 +563,7 @@ def apply_default_device_settings():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
-def send_command_to_adafruit(command, device_type='den'):
+def send_command_to_adafruit(command, device_type='den', debug=True):
     """
     Gửi command tới Adafruit Cloud thông qua REST API
     
@@ -474,9 +592,10 @@ def send_command_to_adafruit(command, device_type='den'):
         
         adafruit_group_key = house.adafruit_group_key.strip() if house.adafruit_group_key else 'yolohome'
         
-        print(f"[DEBUG] Adafruit User: {adafruit_user}")
-        print(f"[DEBUG] Adafruit Group: {adafruit_group_key}")
-        print(f"[DEBUG] Command: {command}")
+        if debug:
+            print(f"[DEBUG] Adafruit User: {adafruit_user}")
+            print(f"[DEBUG] Adafruit Group: {adafruit_group_key}")
+            print(f"[DEBUG] Command: {command}")
         
         if not adafruit_user or not adafruit_key or not adafruit_group_key:
             print("[ERROR] Credentials missing!")
@@ -490,7 +609,8 @@ def send_command_to_adafruit(command, device_type='den'):
         
         # URL: POST /api/v2/{username}/feeds/{feed}/data
         url = f'https://io.adafruit.com/api/v2/{adafruit_user}/feeds/{feed_key}/data'
-        print(f"[DEBUG] URL: {url}")
+        if debug:
+            print(f"[DEBUG] URL: {url}")
         
         headers = {
             'Content-Type': 'application/json',
@@ -503,11 +623,13 @@ def send_command_to_adafruit(command, device_type='den'):
         payload = {
             'value': command_value
         }
-        print(f"[DEBUG] Payload: {payload}")
+        if debug:
+            print(f"[DEBUG] Payload: {payload}")
         
         response = requests.post(url, json=payload, headers=headers, timeout=5)
-        print(f"[DEBUG] Response Status: {response.status_code}")
-        print(f"[DEBUG] Response: {response.text}")
+        if debug:
+            print(f"[DEBUG] Response Status: {response.status_code}")
+            print(f"[DEBUG] Response: {response.text}")
         
         if response.status_code in [200, 201]:
             return {
