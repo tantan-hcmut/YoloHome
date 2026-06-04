@@ -15,6 +15,10 @@ interface Device {
   };
 }
 
+interface RuntimeState {
+  overrideModeText?: string;
+}
+
 const API_BASE = "http://localhost:5000/api";
 const SLIDER_DEBOUNCE_MS = 450;
 
@@ -35,10 +39,32 @@ const clampBrightness = (value: number) => clamp(value, 0, 100);
 
 const clampPercent = (value: number) => clamp(value, 0, 100);
 
+const resolveFanMode = (mode?: string) => {
+  if (mode === "FORCE_OFF" || mode === "FORCED_OFF") return "FORCE_OFF";
+  if (mode === "FORCE_ON" || mode === "FORCED_ON") return "FORCE_ON";
+  return "AUTO";
+};
+
+const getFanModeClass = (mode?: string) => {
+  const resolved = resolveFanMode(mode);
+  if (resolved === "AUTO") return "bg-green-100 text-green-700 border-green-200";
+  if (resolved === "FORCE_OFF") return "bg-red-100 text-red-700 border-red-200";
+  return "bg-blue-100 text-blue-700 border-blue-200";
+};
+
 const rgbToHex = (r: number, g: number, b: number) =>
   `#${[r, g, b]
     .map((value) => clamp(Number(value) || 0, 0, 255).toString(16).padStart(2, "0"))
     .join("")}`;
+
+const getBrightnessPreviewHex = (r: number, g: number, b: number, brightness: number) => {
+  const ratio = clampBrightness(Number(brightness)) / 100;
+  return rgbToHex(
+    Math.round(255 - (255 - clamp(Number(r) || 0, 0, 255)) * ratio),
+    Math.round(255 - (255 - clamp(Number(g) || 0, 0, 255)) * ratio),
+    Math.round(255 - (255 - clamp(Number(b) || 0, 0, 255)) * ratio)
+  );
+};
 
 const getLightState = (device: Device) => {
   const fallback = { r: 255, g: 255, b: 255, brightness: 96 };
@@ -77,6 +103,7 @@ export function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [controlLoading, setControlLoading] = useState<string | null>(null);
+  const [runtimeState, setRuntimeState] = useState<RuntimeState | null>(null);
   const [draftLightControls, setDraftLightControls] = useState<Record<string, { r: number; g: number; b: number; brightness: number }>>({});
   const [draftFanSpeeds, setDraftFanSpeeds] = useState<Record<string, number>>({});
   const sliderTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -90,8 +117,12 @@ export function Devices() {
   // Fetch devices từ API
   useEffect(() => {
     fetchDevices();
+    fetchRuntimeState();
     // Polling every 5 seconds
-    const interval = setInterval(fetchDevices, 10000);
+    const interval = setInterval(() => {
+      fetchDevices();
+      fetchRuntimeState();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -116,6 +147,25 @@ export function Devices() {
     }
   };
 
+  const fetchRuntimeState = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE}/cam-bien/runtime`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) return;
+
+      const result = await response.json();
+      setRuntimeState(result.data || null);
+    } catch (error) {
+      console.error("Failed to fetch runtime state:", error);
+    }
+  };
+
   // Control device
   useEffect(() => {
     return () => {
@@ -129,6 +179,19 @@ export function Devices() {
     additionalData?: any
   ) => {
     const previousDevices = devices;
+    const previousRuntimeState = runtimeState;
+    const targetDevice = devices.find((device) => device.id === deviceId);
+
+    if (targetDevice?.loai_thiet_bi === "quat") {
+      if (action === "auto") {
+        setRuntimeState((current) => ({ ...(current || {}), overrideModeText: "AUTO" }));
+      } else if (action === "off") {
+        setRuntimeState((current) => ({ ...(current || {}), overrideModeText: "FORCE_OFF" }));
+      } else if (action === "on" || action === "set_speed") {
+        setRuntimeState((current) => ({ ...(current || {}), overrideModeText: "FORCE_ON" }));
+      }
+    }
+
     if (action !== "auto") {
       setDevices((currentDevices) =>
         currentDevices.map((device) => {
@@ -250,10 +313,12 @@ export function Devices() {
         }
       } else {
         setDevices(previousDevices);
+        setRuntimeState(previousRuntimeState);
       }
     } catch (error) {
       console.error("Failed to control device:", error);
       setDevices(previousDevices);
+      setRuntimeState(previousRuntimeState);
     } finally {
       setControlLoading(null);
     }
@@ -528,6 +593,12 @@ export function Devices() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {lights.map((device, index) => {
             const lightState = getDisplayLightState(device);
+            const lightPreviewHex = getBrightnessPreviewHex(
+              lightState.r,
+              lightState.g,
+              lightState.b,
+              lightState.brightness
+            );
             const lightSliderKey = `light-${device.id}`;
             const lightIsOn = !!device.trang_thai?.trang_thai_bat_tat;
 
@@ -548,7 +619,7 @@ export function Devices() {
                     <Lightbulb
                       className={`w-6 h-6 ${lightIsOn ? 'text-white' : 'text-gray-500'}`}
                       style={lightIsOn ? {
-                        filter: `drop-shadow(0 0 ${Math.max(2, lightState.brightness / 12)}px ${lightState.hex})`,
+                        filter: `drop-shadow(0 0 ${Math.max(2, lightState.brightness / 12)}px ${lightPreviewHex})`,
                       } : undefined}
                     />
                   </div>
@@ -593,33 +664,46 @@ export function Devices() {
               {/* Color Picker */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">Color</span>
-                  <input
-                    type="color"
-                    value={lightState.hex}
-                    onChange={(e) => {
-                      const rgb = hexToRgb(e.target.value);
-                      const nextLightState = {
-                        r: rgb.r,
-                        g: rgb.g,
-                        b: rgb.b,
-                        brightness: lightState.brightness,
-                      };
-                      setDraftLightControls((current) => ({
-                        ...current,
-                        [device.id]: nextLightState,
-                      }));
-                      if (lightIsOn) {
-                        flushSliderControl(lightSliderKey, device.id, "set_rgb", nextLightState);
-                      }
-                    }}
-                    disabled={controlLoading === device.id}
-                    className="w-10 h-10 cursor-pointer rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,0.5)] bg-transparent overflow-hidden [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none"
+                  <span className="text-sm font-semibold text-gray-700">Màu sắc</span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={lightState.hex}
+                      onChange={(e) => {
+                        const rgb = hexToRgb(e.target.value);
+                        const nextLightState = {
+                          r: rgb.r,
+                          g: rgb.g,
+                          b: rgb.b,
+                          brightness: lightState.brightness,
+                        };
+                        setDraftLightControls((current) => ({
+                          ...current,
+                          [device.id]: nextLightState,
+                        }));
+                        if (lightIsOn) {
+                          flushSliderControl(lightSliderKey, device.id, "set_rgb", nextLightState);
+                        }
+                      }}
+                      disabled={controlLoading === device.id}
+                      className="w-10 h-10 cursor-pointer rounded-full border-2 border-white shadow-[0_0_4px_rgba(0,0,0,0.5)] bg-transparent overflow-hidden [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-gray-400">
+                    <span>Xem trước</span>
+                    <span>{lightPreviewHex.toUpperCase()}</span>
+                  </div>
+                  <div
+                    className="h-14 w-full rounded-xl border border-gray-200 shadow-inner"
+                    style={{ backgroundColor: lightPreviewHex }}
+                    title="Brightness preview"
                   />
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-gray-700">Brightness</span>
+                    <span className="text-sm font-semibold text-gray-700">Độ sáng</span>
                     <span className="text-sm font-bold text-[#6366f1]">{lightState.brightness}%</span>
                   </div>
                   <input
@@ -680,6 +764,7 @@ export function Devices() {
             const fanSpeed = getDisplayFanSpeed(device);
             const fanSliderKey = `fan-${device.id}`;
             const fanIsOn = !!device.trang_thai?.trang_thai_bat_tat;
+            const fanMode = resolveFanMode(runtimeState?.overrideModeText);
 
             return (
             <motion.div
@@ -704,24 +789,14 @@ export function Devices() {
                     <p className="text-xs text-gray-500">{device.vi_tri_lap_dat}</p>
                   </div>
                 </div>
+                <span className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-bold ${getFanModeClass(fanMode)}`}>
+                  {fanMode}
+                </span>
               </div>
 
               {/* Power Toggle Section */}
               <div className="flex items-center justify-between mb-4 p-4 bg-gradient-to-br from-cyan-50 to-purple-50 rounded-xl">
-                <span className="text-sm font-semibold text-gray-700">Power</span>
-                <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearSliderControl(fanSliderKey);
-                    handleControl(device.id, "auto");
-                  }}
-                  disabled={controlLoading === device.id}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-[#6366f1] border border-indigo-100 text-xs font-bold hover:bg-indigo-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Auto
-                </button>
+                <span className="text-sm font-semibold text-gray-700">Bật/Tắt</span>
                 <button
                   onClick={() => {
                     console.log("Fan power clicked:", device.id);
@@ -745,13 +820,25 @@ export function Devices() {
                     fanIsOn ? 'translate-x-6' : ''
                   }`}></div>
                 </button>
-                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  clearSliderControl(fanSliderKey);
+                  handleControl(device.id, "auto");
+                }}
+                disabled={controlLoading === device.id}
+                className="mb-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm font-bold text-[#6366f1] transition-all hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Trả về Auto
+              </button>
 
               {/* Speed Slider */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">Speed</span>
+                  <span className="text-sm font-semibold text-gray-700">Tốc độ</span>
                   <span className="text-sm font-bold text-[#6366f1]">{fanSpeed}%</span>
                 </div>
                 <input

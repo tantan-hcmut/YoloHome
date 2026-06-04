@@ -535,11 +535,20 @@ def sync_sensor_from_adafruit_background():
             if "Feeds not found" not in message:
                 print(f"[Sync] {message}")
 
+EXECUTED_SCHEDULE_KEYS = set()
+
+
+def parse_schedule_action_config(raw_action):
+    if not raw_action:
+        return {'action': 'on'}
+    try:
+        parsed = json.loads(raw_action)
+        return parsed if isinstance(parsed, dict) else {'action': str(raw_action)}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {'action': str(raw_action)}
+
+
 def check_and_execute_schedules_background():
-    """
-    Quét và thực thi lịch trình dựa trên giờ hẹn (TIME) và lặp lại.
-    Hỗ trợ ngày cụ thể và tự động tắt lịch (One-time schedule).
-    """
     with app.app_context():
         from models import db, LichTrinh, ThietBi, TrangThaiThietBi, LichSuHoatDong
         from routes.devices import send_command_to_adafruit
@@ -548,73 +557,133 @@ def check_and_execute_schedules_background():
         now = datetime.now()
         current_time = now.time()
         current_weekday = now.weekday()
-        today_str = now.strftime('%Y-%m-%d') # Lấy chuỗi ngày hôm nay YYYY-MM-DD
-
+        today_str = now.strftime('%Y-%m-%d')
         tasks = LichTrinh.query.filter_by(trang_thai_kich_hoat=True).all()
 
         for task in tasks:
-            # Kiểm tra giờ hẹn
             if task.thoi_gian_hen.hour != current_time.hour or task.thoi_gian_hen.minute != current_time.minute:
                 continue
-            
-            # Kiểm tra điều kiện lặp lại
+
             repeat = task.ngay_trong_tuan or 'Daily'
             is_today_valid = False
             is_one_time = False
-            
+
             if repeat == 'Daily':
                 is_today_valid = True
             elif repeat == 'Weekdays' and current_weekday < 5:
                 is_today_valid = True
             elif repeat == 'Weekends' and current_weekday >= 5:
                 is_today_valid = True
-            elif repeat == today_str: # NẾU LÀ NGÀY CỤ THỂ TRÙNG HÔM NAY
+            elif repeat == today_str:
                 is_today_valid = True
                 is_one_time = True
-                
+
             if not is_today_valid:
+                continue
+
+            action_config = parse_schedule_action_config(task.trang_thai_thiet_bi_muon_dat)
+            target_at = action_config.get('target_at')
+            if action_config.get('schedule_mode') == 'countdown' and target_at:
+                try:
+                    if now < datetime.fromisoformat(target_at):
+                        continue
+                except ValueError:
+                    pass
+
+            run_key = f"{task.id}:{today_str}:{task.thoi_gian_hen.strftime('%H:%M')}"
+            if run_key in EXECUTED_SCHEDULE_KEYS:
                 continue
 
             device = ThietBi.query.get(task.thiet_bi_id)
             if not device:
+                EXECUTED_SCHEDULE_KEYS.add(run_key)
                 continue
-            
-            # Thực thi lệnh dựa trên trạng thái hiện tại của thiết bị để tránh gửi lệnh thừa nếu đã ở trạng thái mong muốn
-            action = task.trang_thai_thiet_bi_muon_dat
+
+            action = action_config.get('action', 'on')
             state = TrangThaiThietBi.query.filter_by(thiet_bi_id=device.id).first()
-            is_on = state.trang_thai_bat_tat if state else False
-            
-            if action == 'off' and not is_on:
-                pass # Đã tắt, bỏ qua lệnh nhưng vẫn cho code chạy tiếp để tự hủy lịch
-            elif action == 'on' and is_on:
-                pass # Đã bật, bỏ qua lệnh
-            else:
-                print(f"[Hẹn Giờ] THỰC THI lệnh {action.upper()} cho {device.ten_thiet_bi}")
-                command = {'action': 'on' if action == 'on' else 'off', 'source': 'schedule'}
-                if action == 'on':
-                    command['action'] = 'light_on' if device.loai_thiet_bi == 'den' else 'fan_on'
+            if not state:
+                state = TrangThaiThietBi(thiet_bi_id=device.id)
+                db.session.add(state)
+            is_on = bool(state.trang_thai_bat_tat)
+
+            should_send = True
+            command = {'action': action, 'source': 'schedule'}
+
+            if action == 'off':
+                should_send = is_on
+                command['action'] = 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off'
+            elif action == 'on':
+                if device.loai_thiet_bi == 'den' and any(key in action_config for key in ['r', 'g', 'b', 'brightness']):
+                    command.update({
+                        'action': 'light_rgb',
+                        'r': int(action_config.get('r', 255)),
+                        'g': int(action_config.get('g', 255)),
+                        'b': int(action_config.get('b', 255)),
+                        'brightness': int(action_config.get('brightness', 96))
+                    })
+                elif device.loai_thiet_bi == 'quat' and action_config.get('speed') is not None:
+                    command.update({
+                        'action': 'fan_speed',
+                        'speed': int(action_config.get('speed', 50))
+                    })
                 else:
-                    command['action'] = 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off'
-                
+                    should_send = not is_on
+                    command['action'] = 'light_on' if device.loai_thiet_bi == 'den' else 'fan_on'
+            elif action == 'set_color' and device.loai_thiet_bi == 'den':
+                command.update({
+                    'action': 'light_rgb',
+                    'r': int(action_config.get('r', 255)),
+                    'g': int(action_config.get('g', 255)),
+                    'b': int(action_config.get('b', 255)),
+                    'brightness': int(action_config.get('brightness', 96))
+                })
+            elif action == 'set_speed' and device.loai_thiet_bi == 'quat':
+                command.update({
+                    'action': 'fan_speed',
+                    'speed': int(action_config.get('speed', 50))
+                })
+            else:
+                should_send = False
+
+            if should_send:
+                print(f"[Schedule] Execute {command['action']} for {device.ten_thiet_bi}")
                 send_command_to_adafruit(command, device.loai_thiet_bi)
-                
-                if state:
-                    state.trang_thai_bat_tat = (action == 'on')
-                
+
+                if command['action'] in ['light_off', 'fan_off']:
+                    state.trang_thai_bat_tat = False
+                    if device.loai_thiet_bi == 'quat':
+                        state.toc_do = 0
+                elif command['action'] == 'light_rgb':
+                    state.trang_thai_bat_tat = True
+                    state.mau_sac = json.dumps({
+                        'r': command.get('r', 255),
+                        'g': command.get('g', 255),
+                        'b': command.get('b', 255),
+                        'brightness': command.get('brightness', 96)
+                    }, ensure_ascii=False, separators=(',', ':'))
+                elif command['action'] == 'fan_speed':
+                    state.trang_thai_bat_tat = True
+                    state.toc_do = command.get('speed', 50)
+                else:
+                    state.trang_thai_bat_tat = command['action'] in ['light_on', 'fan_on']
+
                 new_history = LichSuHoatDong(
                     nha_id=task.nha_id,
                     thiet_bi_id=device.id,
                     user_id=None,
-                    hanh_dong=f"Auto Schedule: {action.upper()}",
-                    thong_so_thay_doi=action,
+                    hanh_dong=f"Auto Schedule: {command['action'].upper()}",
+                    thong_so_thay_doi=json.dumps(action_config, ensure_ascii=False),
                     thoi_gian=now
                 )
                 db.session.add(new_history)
 
-            # Tự động tắt lịch nếu là lịch hẹn 1 lần (One-time schedule)
+            EXECUTED_SCHEDULE_KEYS.add(run_key)
+            if len(EXECUTED_SCHEDULE_KEYS) > 2000:
+                EXECUTED_SCHEDULE_KEYS.clear()
+
             if is_one_time:
                 task.trang_thai_kich_hoat = False
-                print(f"[Hẹn Giờ] Đã tự động tắt lịch '{task.ten_lich_trinh}' vì chỉ hẹn 1 lần.")
+                print(f"[Schedule] Disabled one-time schedule '{task.ten_lich_trinh}'.")
 
         db.session.commit()
 

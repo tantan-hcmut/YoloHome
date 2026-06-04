@@ -91,7 +91,7 @@ CREATE TABLE lich_trinh (
     ten_lich_trinh VARCHAR(255) NOT NULL,
     thoi_gian_hen TIME NOT NULL,
     ngay_trong_tuan VARCHAR(100),
-    trang_thai_thiet_bi_muon_dat VARCHAR(50),
+    trang_thai_thiet_bi_muon_dat TEXT,
     trang_thai_kich_hoat BOOLEAN DEFAULT TRUE
 );
 

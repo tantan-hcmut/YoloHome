@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Thermometer, Droplets, Power, Lightbulb, Fan} from "lucide-react";
+import { Thermometer, Droplets, Power, Lightbulb, Fan, BrainCircuit, Gauge } from "lucide-react";
 import { motion } from "motion/react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -14,10 +14,62 @@ interface SensorData {
   thoi_gian_cap_nhat?: string;
 }
 
+interface RuntimeState {
+  overrideModeText?: string;
+  tinymlHot?: boolean;
+  tinymlScore?: number;
+  tinymlSmooth?: number;
+  autoFanRequest?: boolean;
+  fanOn?: boolean;
+  fanSpeedPercent?: number;
+  temperature?: number;
+  humidity?: number;
+  aiCoolingElapsedMs?: number;
+  aiTargetFanSpeedPercent?: number;
+}
+
 const getSensorTimestamp = (item: any) =>
   item.thoi_gian || item.thoi_gian_ghi_nhan || item.thoi_gian_cap_nhat || item.created_at;
 
 const isValidDate = (date: Date) => !Number.isNaN(date.getTime());
+
+const resolveModeLabel = (mode?: string) => {
+  if (mode === "FORCE_OFF" || mode === "FORCED_OFF") return "FORCE_OFF";
+  if (mode === "FORCE_ON" || mode === "FORCED_ON") return "FORCE_ON";
+  if (mode === "AUTO") return "AUTO";
+  return "AUTO";
+};
+
+const resolveModeClass = (mode?: string) => {
+  const resolved = resolveModeLabel(mode);
+  if (resolved === "AUTO") return "bg-green-100 text-green-700 border-green-200";
+  if (resolved === "FORCE_OFF") return "bg-red-100 text-red-700 border-red-200";
+  if (resolved === "FORCE_ON") return "bg-blue-100 text-blue-700 border-blue-200";
+  return "bg-gray-100 text-gray-600 border-gray-200";
+};
+
+const resolveActualState = (temp?: number, humidity?: number) => {
+  if (temp === undefined && humidity === undefined) {
+    return { label: "Chưa có dữ liệu", detail: "Đang chờ cảm biến", className: "bg-gray-100 text-gray-600" };
+  }
+  if ((temp ?? 0) > 32 || (humidity ?? 0) > 80) {
+    return { label: "Ngưỡng cao", detail: "Nhiệt độ/độ ẩm vượt ngưỡng", className: "bg-red-100 text-red-700" };
+  }
+  if ((temp ?? 100) < 24 || (humidity ?? 100) < 30) {
+    return { label: "Ngưỡng thấp", detail: "Nhiệt độ/độ ẩm thấp", className: "bg-amber-100 text-amber-700" };
+  }
+  return { label: "Ổn định", detail: "Thông số trong ngưỡng", className: "bg-green-100 text-green-700" };
+};
+
+const resolveAiState = (runtime: RuntimeState | null) => {
+  if (!runtime) {
+    return { label: "Chưa có dữ liệu", detail: "Đang chờ telemetry", className: "bg-gray-100 text-gray-600" };
+  }
+  if (runtime.tinymlHot) {
+    return { label: "AI: Nóng", detail: "AI yêu cầu làm mát", className: "bg-red-100 text-red-700" };
+  }
+  return { label: "AI: Bình thường", detail: "AI chưa yêu cầu làm mát", className: "bg-green-100 text-green-700" };
+};
 
 export function Dashboard() {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
@@ -26,16 +78,19 @@ export function Dashboard() {
   const [totalDevices, setTotalDevices] = useState(0);
   const [lightsOn, setLightsOn] = useState(0);
   const [fansOn, setFansOn] = useState(0);
+  const [runtimeState, setRuntimeState] = useState<RuntimeState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     fetchSensorData();
     fetchDeviceStats();
+    fetchRuntimeState();
     // Poll every 5 seconds for real-time updates
     const interval = setInterval(() => {
       fetchSensorData();
       fetchDeviceStats();
+      fetchRuntimeState();
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -70,6 +125,25 @@ export function Dashboard() {
       setFansOn(fans);
     } catch (err) {
       console.error("Error fetching device stats:", err);
+    }
+  };
+
+  const fetchRuntimeState = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/api/cam-bien/runtime`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) return;
+
+      const result = await response.json();
+      setRuntimeState(result.data || null);
+    } catch (err) {
+      console.error("Error fetching runtime state:", err);
     }
   };
 
@@ -174,13 +248,23 @@ export function Dashboard() {
       humidity: sensorData?.do_am || 0, 
     },
   ];
+  const actualTemp = runtimeState?.temperature ?? sensorData?.nhiet_do;
+  const actualHumidity = runtimeState?.humidity ?? sensorData?.do_am;
+  const actualState = resolveActualState(actualTemp, actualHumidity);
+  const aiState = resolveAiState(runtimeState);
+  const operationMode = resolveModeLabel(runtimeState?.overrideModeText);
+
   return (
     <div className="max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
+      <div className="relative bg-white/60 backdrop-blur-xl rounded-3xl p-8 mb-6 border border-white/40 shadow-xl">
         <h1 className="text-2xl font-bold text-gray-800 mb-1">Bảng điều khiển</h1>
         <p className="text-sm text-gray-500">Giám sát môi trường nhà thông minh của bạn</p>
         {error && <p className="text-sm text-red-600 mt-2">Lỗi: {error}</p>}
+        <div className={`absolute right-8 top-8 inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold ${resolveModeClass(operationMode)}`}>
+          <Gauge className="w-4 h-4" />
+          {operationMode}
+        </div>
       </div>
 
       {/* Active Devices Stats */}
@@ -230,6 +314,63 @@ export function Dashboard() {
           </div>
           <div className="text-3xl font-bold text-gray-800 mb-1">{fansOn}</div>
           <div className="text-sm text-gray-500">Quạt đang bật</div>
+        </motion.div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-cyan-100 flex items-center justify-center">
+                <Thermometer className="w-6 h-6 text-cyan-600" />
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 font-medium mb-1">State theo ngưỡng thực tế</div>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-lg font-bold text-gray-800">
+                  <span>{actualState.label}</span>
+                  <span className="text-lg text-gray-500">-</span>
+                  <span className="text-lg text-gray-700">
+                    {actualTemp?.toFixed(1) ?? "--"}°C / {actualHumidity?.toFixed(0) ?? "--"}%
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500">{actualState.detail}</div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28 }}
+          className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                <BrainCircuit className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <div className="text-sm text-gray-500 font-medium mb-1">State theo AI</div>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-lg font-bold text-gray-800">
+                  <span>{aiState.label}</span>
+                  <span className="text-lg text-gray-500">-</span>
+                  <span className="text-lg text-gray-700">
+                    {runtimeState?.tinymlSmooth !== undefined ? runtimeState.tinymlSmooth.toFixed(3) : "--"}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500">
+                  {aiState.detail}
+                  {runtimeState?.autoFanRequest ? " · Auto fan đang yêu cầu làm mát" : ""}
+                </div>
+              </div>
+            </div>
+          </div>
         </motion.div>
       </div>
 

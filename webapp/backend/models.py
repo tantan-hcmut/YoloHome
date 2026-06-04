@@ -193,7 +193,7 @@ class LichTrinh(db.Model):
     ten_lich_trinh = db.Column(db.String(255), nullable=True) # THÊM DÒNG NÀY
     thoi_gian_hen = db.Column(db.Time, nullable=False)
     ngay_trong_tuan = db.Column(db.String(100), nullable=True)
-    trang_thai_thiet_bi_muon_dat = db.Column(db.String(50), nullable=True)
+    trang_thai_thiet_bi_muon_dat = db.Column(db.Text, nullable=True)
     trang_thai_kich_hoat = db.Column(db.Boolean, default=True)
     
     def to_dict(self):

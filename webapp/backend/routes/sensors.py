@@ -1,9 +1,51 @@
 from flask import Blueprint, request, jsonify
-from models import db, TrangThaiCamBien, LichSuCamBien, ThietBi, TrangThaiThietBi
+from models import db, TrangThaiCamBien, LichSuCamBien, ThietBi, TrangThaiThietBi, Nha
 from utils.security import require_auth
 from datetime import datetime, timedelta, timezone
+import json
+import requests
 
 sensors_bp = Blueprint('sensors', __name__, url_prefix='/api/cam-bien')
+
+
+def get_last_adafruit_value(feed_suffix):
+    house = Nha.query.filter(
+        Nha.adafruit_username.isnot(None),
+        Nha.adafruit_key.isnot(None)
+    ).first()
+
+    if not house or not house.adafruit_username or not house.adafruit_key:
+        return None
+
+    user = house.adafruit_username.strip()
+    key = house.adafruit_key.strip()
+    group = house.adafruit_group_key.strip() if house.adafruit_group_key else 'yolohome'
+    feed_key = f'{group}.yolohome-{feed_suffix}'
+    url = f'https://io.adafruit.com/api/v2/{user}/feeds/{feed_key}/data/last'
+    response = requests.get(url, headers={'X-AIO-Key': key}, timeout=4)
+    if response.status_code not in [200, 201]:
+        return None
+
+    return response.json().get('value')
+
+
+def override_mode_to_text(value, fallback=None):
+    if isinstance(value, str):
+        normalized = value.strip().upper()
+        if normalized in ['AUTO', 'FORCED_ON', 'FORCE_ON', 'FORCE-ON']:
+            return 'FORCE_ON' if normalized != 'AUTO' else 'AUTO'
+        if normalized in ['FORCED_OFF', 'FORCE_OFF', 'FORCE-OFF']:
+            return 'FORCE_OFF'
+
+    try:
+        mode = int(value)
+        if mode == 1:
+            return 'FORCE_ON'
+        if mode == 2:
+            return 'FORCE_OFF'
+        return 'AUTO'
+    except (TypeError, ValueError):
+        return fallback or 'AUTO'
 
 # Helper: Convert UTC to Vietnam time (UTC+7)
 def to_vietnam_time(utc_datetime):
@@ -42,6 +84,53 @@ def get_all_sensor_data():
             })
         
         return jsonify({'status': 'success', 'data': result}), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@sensors_bp.route('/runtime', methods=['GET'])
+@require_auth
+def get_runtime_state():
+    try:
+        telemetry_value = get_last_adafruit_value('telemetry')
+        status_value = get_last_adafruit_value('status')
+
+        telemetry = {}
+        if telemetry_value:
+            try:
+                telemetry = json.loads(telemetry_value)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                telemetry = {}
+
+        override_text = override_mode_to_text(
+            telemetry.get('overrideMode'),
+            override_mode_to_text(status_value, 'AUTO')
+        )
+
+        latest_sensor = TrangThaiCamBien.query.order_by(
+            TrangThaiCamBien.thoi_gian_cap_nhat.desc()
+        ).first()
+
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'overrideMode': telemetry.get('overrideMode'),
+                'overrideModeText': override_text,
+                'statusText': status_value,
+                'fanOn': telemetry.get('fanOn'),
+                'fanSpeedPercent': telemetry.get('fanSpeedPercent'),
+                'autoFanRequest': telemetry.get('autoFanRequest'),
+                'tinymlHot': telemetry.get('tinymlHot'),
+                'tinymlScore': telemetry.get('tinymlScore'),
+                'tinymlSmooth': telemetry.get('tinymlSmooth'),
+                'aiCoolingElapsedMs': telemetry.get('aiCoolingElapsedMs'),
+                'aiTargetFanSpeedPercent': telemetry.get('aiTargetFanSpeedPercent'),
+                'temperature': telemetry.get('temp', latest_sensor.nhiet_do if latest_sensor else None),
+                'humidity': telemetry.get('humi', latest_sensor.do_am if latest_sensor else None),
+                'sensorValid': telemetry.get('sensorValid'),
+                'updatedAt': datetime.utcnow().isoformat()
+            }
+        }), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
