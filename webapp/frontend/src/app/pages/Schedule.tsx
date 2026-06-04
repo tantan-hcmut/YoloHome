@@ -315,7 +315,7 @@ export function Schedule() {
           onClick={() => setShowAddModal(true)}
           className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6366f1] to-[#8b5cf6] px-5 py-3 text-sm font-semibold text-white transition-all hover:shadow-lg"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4 cursor-pointer" />
           Tạo lịch hẹn
         </motion.button>
       </div>
@@ -413,7 +413,7 @@ export function Schedule() {
                   <h2 className="text-2xl font-bold text-gray-800">Chi tiết lịch hẹn</h2>
                   <p className="mt-1 text-sm text-gray-500">{selectedSchedule.ten_lich_trinh || selectedSchedule.thiet_bi_ten}</p>
                 </div>
-                <button onClick={() => setSelectedSchedule(null)} className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100">
+                <button onClick={() => setSelectedSchedule(null)} className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100 cursor-pointer">
                   Đóng
                 </button>
               </div>
@@ -502,7 +502,7 @@ export function Schedule() {
                 <h2 className="text-2xl font-bold text-gray-800">Tạo lịch hẹn mới</h2>
                 <p className="mt-1 text-sm text-gray-500">Chọn thiết bị trước, phần cấu hình sẽ đổi theo loại thiết bị.</p>
               </div>
-              <button onClick={() => setShowAddModal(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100">
+              <button onClick={() => setShowAddModal(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-500 hover:bg-gray-100 cursor-pointer">
                 Đóng
               </button>
             </div>
@@ -557,7 +557,7 @@ export function Schedule() {
 
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700">Lặp lại</label>
-                    <select value={repeat} onChange={(event) => setRepeat(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1]">
+                    <select value={repeat} onChange={(event) => setRepeat(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1] cursor-pointer">
                       <option value="Daily">Hàng ngày</option>
                       <option value="Weekdays">Ngày trong tuần (T2 - T6)</option>
                       <option value="Weekends">Cuối tuần (T7, CN)</option>
@@ -572,7 +572,7 @@ export function Schedule() {
                         type="date"
                         value={date}
                         onChange={(event) => setDate(event.target.value)}
-                        className="w-full rounded-xl border border-[#6366f1] bg-[#6366f1]/5 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1]"
+                        className="w-full rounded-xl border border-[#6366f1] bg-[#6366f1]/5 px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1] cursor-pointer"
                       />
                     </div>
                   )}
@@ -586,7 +586,7 @@ export function Schedule() {
                       min={1}
                       value={countdownMinutes}
                       onChange={(event) => setCountdownMinutes(Math.max(1, Number(event.target.value) || 1))}
-                      className="w-28 rounded-xl border border-gray-200 bg-white px-4 py-3 text-center text-lg font-bold text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1]"
+                      className="w-28 rounded-xl border border-gray-200 bg-white px-4 py-3 text-center text-lg font-bold text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1] cursor-pointer"
                     />
                     <span className="text-sm font-semibold text-gray-600">phút sau</span>
                     <div className="ml-auto rounded-xl bg-white px-3 py-2 text-right text-xs font-semibold text-gray-500">
@@ -600,7 +600,7 @@ export function Schedule() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Thiết bị</label>
-                  <select value={deviceId} onChange={(event) => setDeviceId(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1]">
+                  <select value={deviceId} onChange={(event) => setDeviceId(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1] cursor-pointer">
                     {devices.map((device) => (
                       <option key={device.id} value={device.id}>
                         {device.ten_thiet_bi}
@@ -612,7 +612,7 @@ export function Schedule() {
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Hành động</label>
-                  <select value={action} onChange={(event) => setAction(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1]">
+                  <select value={action} onChange={(event) => setAction(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-[#6366f1] cursor-pointer">
                     <option value="on">Bật thiết bị</option>
                     <option value="off">Tắt thiết bị</option>
                     {isLight && <option value="set_color">Đổi màu đèn</option>}
@@ -647,7 +647,7 @@ export function Schedule() {
                         max={100}
                         value={brightness}
                         onChange={(event) => setBrightness(Number(event.target.value))}
-                        className="w-full accent-[#6366f1]"
+                        className="w-full accent-[#6366f1] cursor-pointer"
                       />
                     </div>
                     <div>
@@ -681,7 +681,7 @@ export function Schedule() {
                     max={100}
                     value={fanSpeed}
                     onChange={(event) => setFanSpeed(Number(event.target.value))}
-                    className="w-full accent-[#6366f1]"
+                    className="w-full accent-[#6366f1] cursor-pointer"
                   />
                 </div>
               )}

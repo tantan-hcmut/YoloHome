@@ -398,7 +398,7 @@ export function History() {
                 type="button"
                 onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                 disabled={safeCurrentPage === 1}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Trước
@@ -410,7 +410,7 @@ export function History() {
                     <button
                       type="button"
                       onClick={() => setCurrentPage(1)}
-                      className="w-9 h-9 shrink-0 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                      className="w-9 h-9 shrink-0 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
                     >
                       1
                     </button>
@@ -423,7 +423,7 @@ export function History() {
                     key={page}
                     type="button"
                     onClick={() => setCurrentPage(page)}
-                    className={`w-9 h-9 shrink-0 rounded-xl text-sm font-bold transition-all ${
+                    className={`w-9 h-9 shrink-0 rounded-xl text-sm font-bold transition-all cursor-pointer ${
                       page === safeCurrentPage
                         ? "bg-[#6366f1] text-white shadow-md"
                         : "border border-gray-200 text-gray-600 hover:bg-gray-50"
@@ -439,7 +439,7 @@ export function History() {
                     <button
                       type="button"
                       onClick={() => setCurrentPage(totalPages)}
-                      className="w-9 h-9 shrink-0 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+                      className="w-9 h-9 shrink-0 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
                     >
                       {totalPages}
                     </button>
@@ -451,7 +451,7 @@ export function History() {
                 type="button"
                 onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                 disabled={safeCurrentPage === totalPages}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-all cursor-pointer"
               >
                 Sau
                 <ChevronRight className="w-4 h-4" />
