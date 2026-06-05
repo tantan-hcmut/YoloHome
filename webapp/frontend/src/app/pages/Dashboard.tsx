@@ -228,7 +228,21 @@ export function Dashboard() {
       if (!response.ok) return;
 
       const result = await parseJsonResponse(response);
-      setFanAutoTimeout(result.data ? { ...result.data, syncedAtMs: Date.now() } : null);
+      const syncedAtMs = Date.now();
+      setFanAutoTimeout((current) => {
+        if (!result.data) return null;
+        if (!result.data.active || !current?.active) {
+          return { ...result.data, syncedAtMs };
+        }
+
+        const currentElapsedSeconds = Math.floor((syncedAtMs - (current.syncedAtMs ?? syncedAtMs)) / 1000);
+        const currentRemainingSeconds = Math.max(0, (current.remaining_seconds || 0) - currentElapsedSeconds);
+        return {
+          ...result.data,
+          remaining_seconds: Math.min(result.data.remaining_seconds || 0, currentRemainingSeconds),
+          syncedAtMs,
+        };
+      });
     } catch (err) {
       console.error("Error fetching fan auto timeout:", err);
     }
@@ -237,6 +251,7 @@ export function Dashboard() {
   const scheduleFanAutoTimeout = async () => {
     setFanAutoTimeoutLoading(true);
     try {
+      const requestedSeconds = Math.max(1, Math.min(1440, fanAutoTimeoutMinutes)) * 60;
       const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/api/thiet-bi/fan-auto-timeout`, {
         method: "POST",
@@ -252,7 +267,14 @@ export function Dashboard() {
         throw new Error(result.message || "Failed to schedule fan auto timeout");
       }
 
-      setFanAutoTimeout(result.data ? { ...result.data, syncedAtMs: Date.now() } : null);
+      const syncedAtMs = Date.now();
+      setFanAutoTimeout(result.data ? {
+        ...result.data,
+        active: true,
+        remaining_seconds: requestedSeconds,
+        syncedAtMs,
+      } : null);
+      setFanAutoTimeoutRemainingSeconds(requestedSeconds);
     } catch (err) {
       console.error("Error scheduling fan auto timeout:", err);
     } finally {
