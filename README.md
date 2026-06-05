@@ -2,9 +2,9 @@
 
 YoloHome là hệ thống IoT thông minh sử dụng **ESP32 + TinyML + Web Dashboard** để giám sát và điều khiển môi trường theo thời gian thực.
 
-Link web: https://yolohome.vercel.app
+**Truy cập web tại đây: [yolohome.vercel.app](https://yolohome.vercel.app)**
 
-## Tổng quan hệ thống
+## Tổng quan hệ thống 
 
 Hệ thống gồm 3 thành phần chính:
 
