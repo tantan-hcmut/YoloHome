@@ -120,6 +120,15 @@ function resolveCountdownRemaining(schedule: ScheduleItem, targetAt?: string) {
   return formatRemainingSeconds(getCountdownRemainingSeconds(schedule, targetAt));
 }
 
+function formatCountdownTargetTime(targetAt?: string, fallback = "--:--") {
+  if (!targetAt) return fallback;
+
+  const target = new Date(targetAt);
+  if (Number.isNaN(target.getTime())) return fallback;
+
+  return target.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
 function normalizeScheduleCountdown(item: ScheduleItem, syncedAtMs: number): ScheduleItem {
   const schedule = { ...item, syncedAtMs };
   const config = schedule.action_config || {};
@@ -456,7 +465,7 @@ export function Schedule() {
                         </h3>
                         <div className="mt-1 flex w-max items-center gap-2 rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
                           <Calendar className="h-3.5 w-3.5" />
-                          <span>{mode === "countdown" ? `Tới ${schedule.time}` : formatRepeat(schedule.repeat)}</span>
+                          <span>{mode === "countdown" ? `Tới ${formatCountdownTargetTime(targetAt, schedule.time)}` : formatRepeat(schedule.repeat)}</span>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
