@@ -14,7 +14,8 @@ load_dotenv()
 
 # 2. Khởi tạo ứng dụng Flask
 app = Flask(__name__)
-CORS(app)
+# CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}) # cho việc deloy trên render.com
 
 # 3. Cấu hình kết nối Database
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
