@@ -128,14 +128,19 @@ export function Dashboard() {
     fetchDeviceStats();
     fetchRuntimeState();
     fetchFanAutoTimeout();
-    // Poll every 5 seconds for real-time updates
-    const interval = setInterval(() => {
+    const refreshDashboardData = () => {
       fetchSensorData();
       fetchDeviceStats();
       fetchRuntimeState();
       fetchFanAutoTimeout();
-    }, 5000);
-    return () => clearInterval(interval);
+    };
+
+    window.addEventListener("yolohome:devices-updated", refreshDashboardData);
+    const interval = setInterval(refreshDashboardData, 1000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("yolohome:devices-updated", refreshDashboardData);
+    };
   }, []);
 
   useEffect(() => {

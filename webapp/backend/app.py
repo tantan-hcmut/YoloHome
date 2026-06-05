@@ -209,6 +209,55 @@ def parse_state_color(state):
         return 255, 255, 255, 96
 
 
+def remember_fan_mode_from_command(command):
+    action = command.get('action') if isinstance(command, dict) else None
+    try:
+        from routes.sensors import set_fan_mode_override
+        if action in ['fan_on', 'fan_speed']:
+            set_fan_mode_override('FORCE_ON')
+        elif action == 'fan_off':
+            set_fan_mode_override('FORCE_OFF')
+        elif action == 'fan_auto':
+            set_fan_mode_override('AUTO')
+    except Exception:
+        pass
+
+
+@app.route('/api/voice-status', methods=['POST'])
+def set_voice_status():
+    from routes.devices import send_command_to_adafruit
+
+    try:
+        data = request.get_json() or {}
+        raw_status = normalize_voice_text(str(data.get('status', '')))
+        raw_action = str(data.get('action', '')).lower()
+        active = bool(data.get('active')) or raw_status in ['voice', 'active', 'on'] or raw_action == 'voice_active'
+        action = 'voice_active' if active else 'voice_idle'
+
+        adafruit_response = send_command_to_adafruit({
+            'action': action,
+            'source': 'voice'
+        }, 'voice')
+
+        if not adafruit_response.get('success', False):
+            return jsonify({
+                'status': 'error',
+                'message': adafruit_response.get('message', 'Khong gui duoc trang thai voice'),
+                'data': adafruit_response
+            }), 502
+
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'voice_active': active,
+                'adafruit_command': {'action': action, 'source': 'voice'},
+                'adafruit_response': adafruit_response
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/api/voice-command', methods=['POST'])
 def receive_voice_command():
     from models import db, VoiceCommand, ThietBi, TrangThaiThietBi, LichSuHoatDong
@@ -235,6 +284,14 @@ def receive_voice_command():
             if is_voice_source:
                 return send_command_to_adafruit({
                     'action': 'voice_active',
+                    'source': 'voice'
+                }, 'voice')
+            return None
+
+        def send_voice_idle_if_needed():
+            if is_voice_source:
+                return send_command_to_adafruit({
+                    'action': 'voice_idle',
                     'source': 'voice'
                 }, 'voice')
             return None
@@ -278,7 +335,7 @@ def receive_voice_command():
         db.session.add(command)
         db.session.commit()
 
-        # 2. Thực thi lệnh thực tế (Kết nối với luồng điều khiển của cậu)
+        # 2. Thực thi lệnh thực tế
         if action == 'all_off' or device_name == 'all':
             devices = ThietBi.query.filter(ThietBi.loai_thiet_bi.in_(['den', 'quat'])).all()
             adafruit_commands = []
@@ -290,6 +347,8 @@ def receive_voice_command():
                     'source': 'voice' if is_voice_source else 'webapp'
                 }
                 adafruit_response = send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
+                if device.loai_thiet_bi == 'quat':
+                    remember_fan_mode_from_command(cmd_payload)
                 adafruit_commands.append({
                     'thiet_bi_id': device.id,
                     'command': cmd_payload,
@@ -320,6 +379,7 @@ def receive_voice_command():
             command.status = 'processed'
             command.processed_at = datetime.utcnow()
             db.session.commit()
+            send_voice_idle_if_needed()
 
             return jsonify({
                 'success': True,
@@ -335,11 +395,13 @@ def receive_voice_command():
         device_type = 'den' if device_name == 'light' else 'quat' if device_name == 'fan' else None
 
         if not action or not device_type:
+            send_voice_idle_if_needed()
             return jsonify({'message': 'Lưu lệnh thành công, nhưng không đủ thông tin để bật/tắt', 'id': command.id}), 200
 
         # Tìm thiết bị đầu tiên khớp loại trong nhà
         device = ThietBi.query.filter_by(loai_thiet_bi=device_type).first()
         if not device:
+            send_voice_idle_if_needed()
             return jsonify({'message': 'Lệnh lưu thành công, nhưng không tìm thấy thiết bị phù hợp', 'id': command.id}), 404
 
         # Gửi lệnh xuống Adafruit
@@ -377,6 +439,7 @@ def receive_voice_command():
         cmd_payload = {'source': command_source}
         if action in ['fan_on', 'fan_off', 'fan_auto']:
             if device_type != 'quat':
+                send_voice_idle_if_needed()
                 return jsonify({'error': 'Lenh quat chi ho tro thiet bi quat', 'id': command.id}), 400
             cmd_payload['action'] = action
         elif action in ['fan_speed', 'set_speed'] and device_type == 'quat':
@@ -386,10 +449,12 @@ def receive_voice_command():
             })
         elif action in ['light_on', 'light_off']:
             if device_type != 'den':
+                send_voice_idle_if_needed()
                 return jsonify({'error': 'Lenh den chi ho tro thiet bi den', 'id': command.id}), 400
             cmd_payload['action'] = action
         elif action == 'light_rgb':
             if device_type != 'den':
+                send_voice_idle_if_needed()
                 return jsonify({'error': 'Lenh doi mau chi ho tro den', 'id': command.id}), 400
 
             r = clamp_int(data.get('r'), current_r, 0, 255)
@@ -407,8 +472,10 @@ def receive_voice_command():
             color_rgb = (r, g, b)
         elif action == 'set_color':
             if device_type != 'den':
+                send_voice_idle_if_needed()
                 return jsonify({'error': 'Lenh doi mau chi ho tro den', 'id': command.id}), 400
             if not color_rgb:
+                send_voice_idle_if_needed()
                 return jsonify({'error': 'Khong nhan dien duoc mau can doi', 'id': command.id}), 400
 
             r, g, b = color_rgb
@@ -444,6 +511,8 @@ def receive_voice_command():
             
         send_voice_active_if_needed()
         adafruit_response = send_command_to_adafruit(cmd_payload, device.loai_thiet_bi)
+        if device.loai_thiet_bi == 'quat':
+            remember_fan_mode_from_command(cmd_payload)
 
         # Cập nhật trạng thái và ghi log Lịch sử hoạt động
         if action in ['set_color', 'light_rgb']:
@@ -518,6 +587,7 @@ def receive_voice_command():
         command.status = 'processed'
         command.processed_at = datetime.utcnow()
         db.session.commit()
+        send_voice_idle_if_needed()
 
         return jsonify({
             'success': True,
@@ -611,45 +681,55 @@ def check_and_execute_schedules_background():
         tasks = LichTrinh.query.filter_by(trang_thai_kich_hoat=True).all()
 
         for task in tasks:
-            if task.thoi_gian_hen.hour != current_time.hour or task.thoi_gian_hen.minute != current_time.minute:
-                continue
+            action_config = parse_schedule_action_config(task.trang_thai_thiet_bi_muon_dat)
+            target_at = action_config.get('target_at')
+            is_countdown = action_config.get('schedule_mode') == 'countdown' and target_at
 
             repeat = task.ngay_trong_tuan or 'Daily'
             is_today_valid = False
             is_one_time = False
 
-            if repeat == 'Daily':
-                is_today_valid = True
-            elif repeat == 'Weekdays' and current_weekday < 5:
-                is_today_valid = True
-            elif repeat == 'Weekends' and current_weekday >= 5:
-                is_today_valid = True
-            elif repeat == today_str:
-                is_today_valid = True
-                is_one_time = True
-
-            if not is_today_valid:
-                continue
-
-            action_config = parse_schedule_action_config(task.trang_thai_thiet_bi_muon_dat)
-            target_at = action_config.get('target_at')
-            if action_config.get('schedule_mode') == 'countdown' and target_at:
+            if is_countdown:
                 try:
                     target_dt = datetime.fromisoformat(target_at)
                     if target_dt.tzinfo is None:
                         target_dt = target_dt.replace(tzinfo=timezone.utc)
                     if now < target_dt:
                         continue
-                except ValueError:
-                    pass
+                    is_today_valid = True
+                    is_one_time = True
+                except (TypeError, ValueError):
+                    task.trang_thai_kich_hoat = False
+                    print(f"[Schedule] Disabled invalid countdown schedule '{task.ten_lich_trinh}'.")
+                    continue
+            else:
+                if task.thoi_gian_hen.hour != current_time.hour or task.thoi_gian_hen.minute != current_time.minute:
+                    continue
 
-            run_key = f"{task.id}:{today_str}:{task.thoi_gian_hen.strftime('%H:%M')}"
+                if repeat == 'Daily':
+                    is_today_valid = True
+                elif repeat == 'Weekdays' and current_weekday < 5:
+                    is_today_valid = True
+                elif repeat == 'Weekends' and current_weekday >= 5:
+                    is_today_valid = True
+                elif repeat == today_str:
+                    is_today_valid = True
+                    is_one_time = True
+
+            if not is_today_valid:
+                continue
+
+            run_key_time = target_at if is_countdown else task.thoi_gian_hen.strftime('%H:%M')
+            run_key = f"{task.id}:{today_str}:{run_key_time}"
             if run_key in EXECUTED_SCHEDULE_KEYS:
                 continue
 
             device = ThietBi.query.get(task.thiet_bi_id)
             if not device:
                 EXECUTED_SCHEDULE_KEYS.add(run_key)
+                if is_countdown:
+                    task.trang_thai_kich_hoat = False
+                    print(f"[Schedule] Disabled countdown schedule '{task.ten_lich_trinh}' because device was not found.")
                 continue
 
             action = action_config.get('action', 'on')
@@ -663,8 +743,8 @@ def check_and_execute_schedules_background():
             command = {'action': action, 'source': 'schedule'}
 
             if action == 'off':
-                should_send = is_on
                 command['action'] = 'light_off' if device.loai_thiet_bi == 'den' else 'fan_off'
+                should_send = True if device.loai_thiet_bi == 'quat' else is_on
             elif action == 'on':
                 if device.loai_thiet_bi == 'den' and any(key in action_config for key in ['r', 'g', 'b', 'brightness']):
                     command.update({
@@ -680,8 +760,8 @@ def check_and_execute_schedules_background():
                         'speed': int(action_config.get('speed', 50))
                     })
                 else:
-                    should_send = not is_on
                     command['action'] = 'light_on' if device.loai_thiet_bi == 'den' else 'fan_on'
+                    should_send = True if device.loai_thiet_bi == 'quat' else not is_on
             elif action == 'set_color' and device.loai_thiet_bi == 'den':
                 command.update({
                     'action': 'light_rgb',
@@ -701,6 +781,8 @@ def check_and_execute_schedules_background():
             if should_send:
                 print(f"[Schedule] Execute {command['action']} for {device.ten_thiet_bi}")
                 send_command_to_adafruit(command, device.loai_thiet_bi)
+                if device.loai_thiet_bi == 'quat':
+                    remember_fan_mode_from_command(command)
 
                 if command['action'] in ['light_off', 'fan_off']:
                     state.trang_thai_bat_tat = False
@@ -734,9 +816,9 @@ def check_and_execute_schedules_background():
             if len(EXECUTED_SCHEDULE_KEYS) > 2000:
                 EXECUTED_SCHEDULE_KEYS.clear()
 
-            if is_one_time:
+            if is_countdown or is_one_time:
                 task.trang_thai_kich_hoat = False
-                print(f"[Schedule] Disabled one-time schedule '{task.ten_lich_trinh}'.")
+                print(f"[Schedule] Disabled completed schedule '{task.ten_lich_trinh}'.")
 
         db.session.commit()
 

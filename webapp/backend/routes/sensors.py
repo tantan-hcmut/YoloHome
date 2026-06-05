@@ -6,6 +6,27 @@ import json
 import requests
 
 sensors_bp = Blueprint('sensors', __name__, url_prefix='/api/cam-bien')
+FAN_MODE_OVERRIDE_TEXT = None
+FAN_MODE_OVERRIDE_UPDATED_AT = None
+FAN_MODE_OVERRIDE_TTL_SECONDS = 120
+
+
+def set_fan_mode_override(mode):
+    global FAN_MODE_OVERRIDE_TEXT, FAN_MODE_OVERRIDE_UPDATED_AT
+    resolved = override_mode_to_text(mode, None)
+    if not resolved:
+        return
+    FAN_MODE_OVERRIDE_TEXT = resolved
+    FAN_MODE_OVERRIDE_UPDATED_AT = datetime.now(timezone.utc)
+
+
+def get_fan_mode_override():
+    if not FAN_MODE_OVERRIDE_TEXT or not FAN_MODE_OVERRIDE_UPDATED_AT:
+        return None
+    age = datetime.now(timezone.utc) - FAN_MODE_OVERRIDE_UPDATED_AT
+    if age.total_seconds() > FAN_MODE_OVERRIDE_TTL_SECONDS:
+        return None
+    return FAN_MODE_OVERRIDE_TEXT
 
 
 def get_last_adafruit_value(feed_suffix):
@@ -106,6 +127,7 @@ def get_runtime_state():
             telemetry.get('overrideMode'),
             override_mode_to_text(status_value, 'AUTO')
         )
+        override_text = get_fan_mode_override() or override_text
 
         latest_sensor = TrangThaiCamBien.query.order_by(
             TrangThaiCamBien.thoi_gian_cap_nhat.desc()

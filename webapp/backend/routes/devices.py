@@ -29,6 +29,11 @@ def clamp_brightness(value):
 
 
 def send_fan_auto_command(device, debug=True):
+    try:
+        from routes.sensors import set_fan_mode_override
+        set_fan_mode_override('AUTO')
+    except Exception:
+        pass
     return send_command_to_adafruit({
         'action': 'fan_auto',
         'source': 'webapp'
@@ -371,6 +376,18 @@ def control_thiet_bi(thiet_bi_id):
         
         if not response['success']:
             return jsonify({'status': 'error', 'message': response['message']}), 500
+
+        if device.loai_thiet_bi == 'quat':
+            try:
+                from routes.sensors import set_fan_mode_override
+                if command.get('action') in ['fan_on', 'fan_speed']:
+                    set_fan_mode_override('FORCE_ON')
+                elif command.get('action') == 'fan_off':
+                    set_fan_mode_override('FORCE_OFF')
+                elif command.get('action') == 'fan_auto':
+                    set_fan_mode_override('AUTO')
+            except Exception:
+                pass
         
         # Cập nhật trạng thái trong DB (optimistic update)
         state = get_or_create_device_state(thiet_bi_id)
@@ -469,6 +486,11 @@ def control_all_thiet_bi():
             state = get_or_create_device_state(device.id)
             state.trang_thai_bat_tat = False
             if device.loai_thiet_bi == 'quat':
+                try:
+                    from routes.sensors import set_fan_mode_override
+                    set_fan_mode_override('FORCE_OFF')
+                except Exception:
+                    pass
                 state.toc_do = 0
 
             log = LichSuHoatDong(
@@ -533,6 +555,11 @@ def apply_default_device_settings():
                 if not response['success']:
                     db.session.rollback()
                     return jsonify({'status': 'error', 'message': response['message']}), 500
+                try:
+                    from routes.sensors import set_fan_mode_override
+                    set_fan_mode_override('AUTO')
+                except Exception:
+                    pass
 
             log = LichSuHoatDong(
                 nha_id=device.nha_id,

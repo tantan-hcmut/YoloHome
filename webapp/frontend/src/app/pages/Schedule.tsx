@@ -38,6 +38,8 @@ type ScheduleItem = {
     b?: number;
     brightness?: number;
     speed?: number;
+    delay_minutes?: number;
+    delay_seconds?: number;
   };
   time: string;
   repeat: string;
@@ -79,21 +81,6 @@ function formatRepeat(repeat: string) {
   return repeat;
 }
 
-function formatRemaining(targetAt?: string) {
-  if (!targetAt) return "--:--:--";
-
-  const target = new Date(targetAt).getTime();
-  if (Number.isNaN(target)) return "--:--:--";
-
-  const diff = Math.max(0, target - Date.now());
-  const totalSeconds = Math.floor(diff / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
-}
-
 function formatRemainingSeconds(seconds?: number) {
   const totalSeconds = Math.max(0, Math.floor(seconds || 0));
   const hours = Math.floor(totalSeconds / 3600);
@@ -103,14 +90,52 @@ function formatRemainingSeconds(seconds?: number) {
   return [hours, minutes, secs].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
-function resolveCountdownRemaining(schedule: ScheduleItem, targetAt?: string) {
+function getCountdownInitialSeconds(schedule: ScheduleItem) {
+  const config = schedule.action_config || {};
+  const delaySeconds = Number(config.delay_seconds);
+  if (Number.isFinite(delaySeconds) && delaySeconds > 0) return Math.floor(delaySeconds);
+
+  const delayMinutes = Number(config.delay_minutes);
+  if (Number.isFinite(delayMinutes) && delayMinutes > 0) return Math.floor(delayMinutes * 60);
+
+  return Math.max(0, Math.floor(schedule.remaining_seconds || 0));
+}
+
+function getCountdownRemainingSeconds(schedule: ScheduleItem, targetAt?: string) {
+  if (!schedule.active) return getCountdownInitialSeconds(schedule);
+
   if (typeof schedule.remaining_seconds === "number") {
     const syncedAtMs = schedule.syncedAtMs ?? Date.now();
     const elapsedSeconds = Math.floor((Date.now() - syncedAtMs) / 1000);
-    return formatRemainingSeconds(schedule.remaining_seconds - elapsedSeconds);
+    return Math.max(0, Math.floor(schedule.remaining_seconds - elapsedSeconds));
   }
 
-  return formatRemaining(targetAt);
+  if (!targetAt) return 0;
+  const target = new Date(targetAt).getTime();
+  if (Number.isNaN(target)) return 0;
+  return Math.max(0, Math.floor((target - Date.now()) / 1000));
+}
+
+function resolveCountdownRemaining(schedule: ScheduleItem, targetAt?: string) {
+  return formatRemainingSeconds(getCountdownRemainingSeconds(schedule, targetAt));
+}
+
+function normalizeScheduleCountdown(item: ScheduleItem, syncedAtMs: number): ScheduleItem {
+  const schedule = { ...item, syncedAtMs };
+  const config = schedule.action_config || {};
+  const mode = schedule.schedule_mode || config.schedule_mode || "time";
+  const targetAt = schedule.target_at || config.target_at;
+
+  if (mode !== "countdown" || !schedule.active || getCountdownRemainingSeconds(schedule, targetAt) > 0) {
+    return schedule;
+  }
+
+  return {
+    ...schedule,
+    active: false,
+    remaining_seconds: getCountdownInitialSeconds(schedule),
+    syncedAtMs,
+  };
 }
 
 function actionLabel(action: string) {
@@ -167,7 +192,7 @@ export function Schedule() {
       if (schedulesRes.ok) {
         const data = await schedulesRes.json();
         const syncedAtMs = Date.now();
-        setSchedules((data.data || []).map((item: ScheduleItem) => ({ ...item, syncedAtMs })));
+        setSchedules((data.data || []).map((item: ScheduleItem) => normalizeScheduleCountdown(item, syncedAtMs)));
       }
     } finally {
       setLoading(false);
@@ -176,13 +201,64 @@ export function Schedule() {
 
   useEffect(() => {
     fetchData();
-    const refreshInterval = window.setInterval(fetchData, 10000);
+    const refreshInterval = window.setInterval(fetchData, 1000);
     const tickInterval = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => {
       window.clearInterval(refreshInterval);
       window.clearInterval(tickInterval);
     };
   }, []);
+
+  useEffect(() => {
+    setSelectedSchedule((current) => {
+      if (!current) return current;
+      return schedules.find((schedule) => schedule.id === current.id) || null;
+    });
+  }, [schedules]);
+
+  useEffect(() => {
+    setSchedules((currentSchedules) => {
+      let changed = false;
+      const nextSchedules = currentSchedules.map((schedule) => {
+        const config = schedule.action_config || {};
+        const mode = schedule.schedule_mode || config.schedule_mode || "time";
+        const targetAt = schedule.target_at || config.target_at;
+
+        if (mode !== "countdown" || !schedule.active || getCountdownRemainingSeconds(schedule, targetAt) > 0) {
+          return schedule;
+        }
+
+        changed = true;
+        return {
+          ...schedule,
+          active: false,
+          remaining_seconds: getCountdownInitialSeconds(schedule),
+          syncedAtMs: Date.now(),
+        };
+      });
+
+      return changed ? nextSchedules : currentSchedules;
+    });
+
+    setSelectedSchedule((current) => {
+      if (!current) return current;
+
+      const config = current.action_config || {};
+      const mode = current.schedule_mode || config.schedule_mode || "time";
+      const targetAt = current.target_at || config.target_at;
+
+      if (mode !== "countdown" || !current.active || getCountdownRemainingSeconds(current, targetAt) > 0) {
+        return current;
+      }
+
+      return {
+        ...current,
+        active: false,
+        remaining_seconds: getCountdownInitialSeconds(current),
+        syncedAtMs: Date.now(),
+      };
+    });
+  }, [tick]);
 
   useEffect(() => {
     if (isLight && action === "set_speed") setAction("on");
@@ -267,7 +343,7 @@ export function Schedule() {
 
       setShowAddModal(false);
       resetForm();
-      fetchData();
+      await fetchData();
     } catch {
       setError("Không kết nối được backend.");
     }

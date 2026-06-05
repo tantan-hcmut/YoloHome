@@ -119,12 +119,16 @@ export function Devices() {
   useEffect(() => {
     fetchDevices();
     fetchRuntimeState();
-    // Polling every 5 seconds
-    const interval = setInterval(() => {
+    const refreshDevices = () => {
       fetchDevices();
       fetchRuntimeState();
-    }, 10000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener("yolohome:devices-updated", refreshDevices);
+    const interval = setInterval(refreshDevices, 1000);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("yolohome:devices-updated", refreshDevices);
+    };
   }, []);
 
   const fetchDevices = async () => {

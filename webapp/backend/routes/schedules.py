@@ -31,6 +31,14 @@ def schedule_remaining_seconds(target_at):
         return 0
 
 
+def resolve_schedule_active(schedule, action_config):
+    if not schedule.trang_thai_kich_hoat:
+        return False
+    if action_config.get('schedule_mode') != 'countdown':
+        return True
+    return schedule_remaining_seconds(action_config.get('target_at')) > 0
+
+
 @schedules_bp.route('', methods=['GET'])
 @require_auth
 def get_schedules():
@@ -40,6 +48,8 @@ def get_schedules():
         for schedule in schedules:
             device = ThietBi.query.get(schedule.thiet_bi_id)
             action_config = parse_schedule_action(schedule.trang_thai_thiet_bi_muon_dat)
+            remaining_seconds = schedule_remaining_seconds(action_config.get('target_at'))
+            is_active = resolve_schedule_active(schedule, action_config)
             result.append({
                 'id': schedule.id,
                 'ten_lich_trinh': schedule.ten_lich_trinh,
@@ -52,8 +62,8 @@ def get_schedules():
                 'repeat': schedule.ngay_trong_tuan or 'Daily',
                 'schedule_mode': action_config.get('schedule_mode', 'time'),
                 'target_at': action_config.get('target_at'),
-                'remaining_seconds': schedule_remaining_seconds(action_config.get('target_at')),
-                'active': schedule.trang_thai_kich_hoat
+                'remaining_seconds': remaining_seconds,
+                'active': is_active
             })
         return jsonify({'status': 'success', 'data': result}), 200
     except Exception as e:

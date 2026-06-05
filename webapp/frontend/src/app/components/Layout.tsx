@@ -202,6 +202,24 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     }
   }, [commandJson]);
 
+  const sendVoiceStatusToBackend = async (active: boolean) => {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/voice-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: active ? 'voice' : 'idle',
+          active,
+          source: 'voice',
+        }),
+      });
+    } catch (error) {
+      console.error('Error sending voice status:', error);
+    }
+  };
+
   const sendCommandToBackend = async (command: any) => {
     try {
       setSendStatus('Đang gửi lệnh...');
@@ -216,6 +234,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
       if (response.ok) {
         setSendStatus('Lệnh đã được gửi thành công!');
         console.log('Voice command sent successfully:', command);
+        window.dispatchEvent(new CustomEvent("yolohome:devices-updated", { detail: { source: "voice", command } }));
       } else {
         setSendStatus('Lỗi khi gửi lệnh!');
         console.error('Failed to send voice command:', response.statusText);
@@ -223,6 +242,8 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     } catch (error) {
       setSendStatus('Lỗi kết nối!');
       console.error('Error sending voice command:', error);
+    } finally {
+      await sendVoiceStatusToBackend(false);
     }
 
     setTimeout(() => setSendStatus(''), 3000);
@@ -232,19 +253,24 @@ export function Layout({ children }: { children?: React.ReactNode }) {
     return buildVoiceCommand(text);
   };
 
-  const toggleMic = () => {
+  const toggleMic = async () => {
     if (!isMicActive) {
-      const speechRecognition = new (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition();
-      if (!speechRecognition) {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
         alert('Trình duyệt không hỗ trợ nhận diện giọng nói.');
         return;
       }
+
+      await sendVoiceStatusToBackend(true);
+      const speechRecognition = new SpeechRecognition();
+      let hasVoiceCommand = false;
       
       speechRecognition.lang = 'vi-VN';
       speechRecognition.continuous = false;
       speechRecognition.interimResults = false;
       
       speechRecognition.onresult = (event: any) => {
+        hasVoiceCommand = true;
         const text = event.results[0][0].transcript;
         setRecognizedText(text);
         const command = parseVoiceCommand(text);
@@ -254,13 +280,26 @@ export function Layout({ children }: { children?: React.ReactNode }) {
       speechRecognition.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error);
         setIsMicActive(false);
+        if (!hasVoiceCommand) {
+          sendVoiceStatusToBackend(false);
+        }
       };
       
       speechRecognition.onend = () => {
         setIsMicActive(false);
+        if (!hasVoiceCommand) {
+          sendVoiceStatusToBackend(false);
+        }
       };
       
-      speechRecognition.start();
+      try {
+        speechRecognition.start();
+      } catch (error) {
+        console.error('Speech recognition start error:', error);
+        setIsMicActive(false);
+        await sendVoiceStatusToBackend(false);
+        return;
+      }
 
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then((mediaStream) => {
@@ -286,6 +325,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
           console.error('Error accessing microphone:', error);
           alert('Không thể truy cập microphone. Vui lòng kiểm tra quyền truy cập.');
           speechRecognition.stop();
+          sendVoiceStatusToBackend(false);
         });
     } else {
       if (recorder) {
@@ -297,6 +337,7 @@ export function Layout({ children }: { children?: React.ReactNode }) {
         setStream(null);
       }
       setIsMicActive(false);
+      await sendVoiceStatusToBackend(false);
     }
   };
 
