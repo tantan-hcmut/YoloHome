@@ -1,6 +1,4 @@
 .env
-.env.*
-!.env.example
 uploads/
 face-captures/
 __pycache__/
@@ -9,4 +7,3 @@ webapp/backend/BEDADN/
 webapp/backend/instance/
 webapp/frontend/node_modules/
 .vercel
-.env*

@@ -13,7 +13,7 @@ import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { PageLoading } from "../components/PageLoading";
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 const ITEMS_PER_PAGE = 10;
 const PAGE_WINDOW_SIZE = 5;
 

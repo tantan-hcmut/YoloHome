@@ -20,7 +20,7 @@ interface RuntimeState {
   overrideModeText?: string;
 }
 
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = `${import.meta.env.VITE_API_URL}/api`;
 const SLIDER_DEBOUNCE_MS = 450;
 
 // Convert hex to RGB
