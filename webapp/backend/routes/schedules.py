@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db, LichTrinh, ThietBi, Nha
 from utils.security import require_auth
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 
 schedules_bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
@@ -17,6 +17,18 @@ def parse_schedule_action(raw_action):
         return parsed if isinstance(parsed, dict) else {'action': str(raw_action)}
     except (TypeError, ValueError, json.JSONDecodeError):
         return {'action': str(raw_action)}
+
+
+def schedule_remaining_seconds(target_at):
+    if not target_at:
+        return 0
+    try:
+        target = datetime.fromisoformat(str(target_at))
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=timezone.utc)
+        return max(0, int((target - datetime.now(timezone.utc)).total_seconds()))
+    except (TypeError, ValueError):
+        return 0
 
 
 @schedules_bp.route('', methods=['GET'])
@@ -40,6 +52,7 @@ def get_schedules():
                 'repeat': schedule.ngay_trong_tuan or 'Daily',
                 'schedule_mode': action_config.get('schedule_mode', 'time'),
                 'target_at': action_config.get('target_at'),
+                'remaining_seconds': schedule_remaining_seconds(action_config.get('target_at')),
                 'active': schedule.trang_thai_kich_hoat
             })
         return jsonify({'status': 'success', 'data': result}), 200
@@ -59,7 +72,7 @@ def create_schedule():
 
         if schedule_mode == 'countdown':
             delay_minutes = max(1, int(payload.get('delay_minutes', 1)))
-            target_at = datetime.now() + timedelta(minutes=delay_minutes)
+            target_at = datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)
             time_str = target_at.strftime('%H:%M')
             repeat_value = target_at.strftime('%Y-%m-%d')
         elif not time_str:

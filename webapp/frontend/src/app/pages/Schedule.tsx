@@ -43,6 +43,8 @@ type ScheduleItem = {
   repeat: string;
   schedule_mode?: "time" | "countdown";
   target_at?: string;
+  remaining_seconds?: number;
+  syncedAtMs?: number;
   active: boolean;
 };
 
@@ -90,6 +92,25 @@ function formatRemaining(targetAt?: string) {
   const seconds = totalSeconds % 60;
 
   return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+}
+
+function formatRemainingSeconds(seconds?: number) {
+  const totalSeconds = Math.max(0, Math.floor(seconds || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  return [hours, minutes, secs].map((value) => String(value).padStart(2, "0")).join(":");
+}
+
+function resolveCountdownRemaining(schedule: ScheduleItem, targetAt?: string) {
+  if (typeof schedule.remaining_seconds === "number") {
+    const syncedAtMs = schedule.syncedAtMs ?? Date.now();
+    const elapsedSeconds = Math.floor((Date.now() - syncedAtMs) / 1000);
+    return formatRemainingSeconds(schedule.remaining_seconds - elapsedSeconds);
+  }
+
+  return formatRemaining(targetAt);
 }
 
 function actionLabel(action: string) {
@@ -145,7 +166,8 @@ export function Schedule() {
 
       if (schedulesRes.ok) {
         const data = await schedulesRes.json();
-        setSchedules(data.data || []);
+        const syncedAtMs = Date.now();
+        setSchedules((data.data || []).map((item: ScheduleItem) => ({ ...item, syncedAtMs })));
       }
     } finally {
       setLoading(false);
@@ -346,7 +368,7 @@ export function Schedule() {
                       {mode === "countdown" ? "Đếm ngược" : "Theo giờ"}
                     </div>
                     <div className="text-xl font-bold tracking-wider">
-                      {mode === "countdown" ? formatRemaining(targetAt) : schedule.time}
+                      {mode === "countdown" ? resolveCountdownRemaining(schedule, targetAt) : schedule.time}
                     </div>
                   </div>
 
@@ -429,7 +451,7 @@ export function Schedule() {
                 </div>
                 <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
                   <span className="font-semibold text-gray-500">Thời điểm chạy</span>
-                  <span className="font-bold text-gray-800">{mode === "countdown" ? `${formatRemaining(targetAt)} còn lại` : `${selectedSchedule.time} - ${formatRepeat(selectedSchedule.repeat)}`}</span>
+                  <span className="font-bold text-gray-800">{mode === "countdown" ? `${resolveCountdownRemaining(selectedSchedule, targetAt)} còn lại` : `${selectedSchedule.time} - ${formatRepeat(selectedSchedule.repeat)}`}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
                   <span className="font-semibold text-gray-500">Trạng thái lịch</span>

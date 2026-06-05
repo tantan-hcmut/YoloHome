@@ -602,9 +602,9 @@ def check_and_execute_schedules_background():
     with app.app_context():
         from models import db, LichTrinh, ThietBi, TrangThaiThietBi, LichSuHoatDong
         from routes.devices import send_command_to_adafruit
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         current_time = now.time()
         current_weekday = now.weekday()
         today_str = now.strftime('%Y-%m-%d')
@@ -635,7 +635,10 @@ def check_and_execute_schedules_background():
             target_at = action_config.get('target_at')
             if action_config.get('schedule_mode') == 'countdown' and target_at:
                 try:
-                    if now < datetime.fromisoformat(target_at):
+                    target_dt = datetime.fromisoformat(target_at)
+                    if target_dt.tzinfo is None:
+                        target_dt = target_dt.replace(tzinfo=timezone.utc)
+                    if now < target_dt:
                         continue
                 except ValueError:
                     pass

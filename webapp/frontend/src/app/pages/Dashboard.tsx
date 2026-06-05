@@ -33,6 +33,7 @@ interface FanAutoTimeoutState {
   active: boolean;
   expires_at: string | null;
   remaining_seconds: number;
+  syncedAtMs?: number;
 }
 
 const getSensorTimestamp = (item: any) =>
@@ -139,18 +140,14 @@ export function Dashboard() {
 
   useEffect(() => {
     const updateRemainingTime = () => {
-      if (!fanAutoTimeout?.active || !fanAutoTimeout.expires_at) {
+      if (!fanAutoTimeout?.active) {
         setFanAutoTimeoutRemainingSeconds(0);
         return;
       }
 
-      const expiresAtMs = new Date(fanAutoTimeout.expires_at).getTime();
-      if (Number.isNaN(expiresAtMs)) {
-        setFanAutoTimeoutRemainingSeconds(Math.max(0, fanAutoTimeout.remaining_seconds || 0));
-        return;
-      }
-
-      const nextRemainingSeconds = Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000));
+      const syncedAtMs = fanAutoTimeout.syncedAtMs ?? Date.now();
+      const elapsedSeconds = Math.floor((Date.now() - syncedAtMs) / 1000);
+      const nextRemainingSeconds = Math.max(0, Math.floor((fanAutoTimeout.remaining_seconds || 0) - elapsedSeconds));
       setFanAutoTimeoutRemainingSeconds(nextRemainingSeconds);
 
       if (nextRemainingSeconds === 0) {
@@ -164,7 +161,7 @@ export function Dashboard() {
     updateRemainingTime();
     const countdownInterval = setInterval(updateRemainingTime, 1000);
     return () => clearInterval(countdownInterval);
-  }, [fanAutoTimeout?.active, fanAutoTimeout?.expires_at, fanAutoTimeout?.remaining_seconds]);
+  }, [fanAutoTimeout?.active, fanAutoTimeout?.remaining_seconds, fanAutoTimeout?.syncedAtMs]);
 
   const fetchDeviceStats = async () => {
     try {
@@ -231,7 +228,7 @@ export function Dashboard() {
       if (!response.ok) return;
 
       const result = await parseJsonResponse(response);
-      setFanAutoTimeout(result.data || null);
+      setFanAutoTimeout(result.data ? { ...result.data, syncedAtMs: Date.now() } : null);
     } catch (err) {
       console.error("Error fetching fan auto timeout:", err);
     }
@@ -255,7 +252,7 @@ export function Dashboard() {
         throw new Error(result.message || "Failed to schedule fan auto timeout");
       }
 
-      setFanAutoTimeout(result.data || null);
+      setFanAutoTimeout(result.data ? { ...result.data, syncedAtMs: Date.now() } : null);
     } catch (err) {
       console.error("Error scheduling fan auto timeout:", err);
     } finally {
@@ -280,7 +277,7 @@ export function Dashboard() {
         throw new Error(result.message || "Failed to cancel fan auto timeout");
       }
 
-      setFanAutoTimeout(result.data || null);
+      setFanAutoTimeout(result.data ? { ...result.data, syncedAtMs: Date.now() } : null);
     } catch (err) {
       console.error("Error canceling fan auto timeout:", err);
     } finally {
