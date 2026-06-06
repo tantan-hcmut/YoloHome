@@ -98,8 +98,10 @@ int DHT20::read()
   int status = requestData();
   if (status < 0) return status;
   //  wait for measurement ready
+  uint32_t waitStart = millis();
   while (isMeasuring())
   {
+    if (millis() - waitStart > 250) return DHT20_ERROR_CONNECT;
     yield();
   }
   //  read the measurement
@@ -229,8 +231,9 @@ float DHT20::getTempOffset()
 //
 uint8_t DHT20::readStatus()
 {
-  _wire->requestFrom(DHT20_ADDRESS, (uint8_t)1);
+  int n = _wire->requestFrom(DHT20_ADDRESS, (uint8_t)1);
   delay(1);  //  needed to stabilize timing
+  if (n < 1 || _wire->available() < 1) return 0x80;
   return (uint8_t) _wire->read();
 }
 

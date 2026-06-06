@@ -19,18 +19,7 @@ uint8_t clampByteValue(int value)
   return static_cast<uint8_t>(value);
 }
 
-uint8_t clampPercentValue(int value)
-{
-  if (value < 0)
-  {
-    return 0;
-  }
-  if (value > 100)
-  {
-    return 100;
-  }
-  return static_cast<uint8_t>(value);
-}
+
 
 uint8_t lerpPercent(const uint8_t startValue, const uint8_t endValue, const float t)
 {
@@ -91,13 +80,13 @@ void broadcastControlState()
     return;
   }
 
-  StaticJsonDocument<448> doc;
+  JsonDocument doc;
   doc["page"] = "control";
   doc["fanOn"] = st.fanOn;
   doc["fanSpeedPercent"] = st.fanSpeedPercent;
   doc["autoFanRequest"] = st.autoFanRequest;
   doc["overrideMode"] = static_cast<uint8_t>(st.overrideMode);
-  doc["overrideUntilMs"] = st.overrideUntilMs;
+  doc["overrideStartMs"] = st.overrideStartMs;
   doc["voiceActive"] = st.voiceActive;
   doc["wifiConnected"] = st.wifiConnected;
   doc["cloudConnected"] = st.cloudConnected;
@@ -130,7 +119,7 @@ void task_control_logic(void *pvParameters)
   bool voiceActive = false;
   bool latestAutoPrediction = false;
   OverrideMode overrideMode = OVERRIDE_MODE_AUTO;
-  uint32_t overrideUntilMs = 0;
+  uint32_t overrideStartMs = 0;
   uint32_t aiCoolingStartMs = 0;
 
   bool lightOn = false;
@@ -153,11 +142,11 @@ void task_control_logic(void *pvParameters)
 
     if (voiceActive && xStateMutex != nullptr && xSemaphoreTake(xStateMutex, pdMS_TO_TICKS(10)) == pdTRUE)
     {
-      if (gState.voiceActiveUntilMs != 0 && nowMs >= gState.voiceActiveUntilMs)
+      if (gState.voiceActiveStartMs != 0 && elapsedSince(gState.voiceActiveStartMs) >= cfg.voiceIndicatorHoldMs)
       {
         voiceActive = false;
         gState.voiceActive = false;
-        gState.voiceActiveUntilMs = 0;
+        gState.voiceActiveStartMs = 0;
         xSemaphoreGive(xStateMutex);
         stateChanged = true;
       }
@@ -167,10 +156,10 @@ void task_control_logic(void *pvParameters)
       }
     }
 
-    if (overrideMode != OVERRIDE_MODE_AUTO && nowMs >= overrideUntilMs)
+    if (overrideMode != OVERRIDE_MODE_AUTO && elapsedSince(overrideStartMs) >= cfg.manualOverrideMs)
     {
       overrideMode = OVERRIDE_MODE_AUTO;
-      overrideUntilMs = 0;
+      overrideStartMs = 0;
       stateChanged = true;
     }
 
@@ -188,7 +177,7 @@ void task_control_logic(void *pvParameters)
         fanOn = true;
         autoFanRequest = false;
         overrideMode = OVERRIDE_MODE_FORCE_ON;
-        overrideUntilMs = nowMs + cfg.manualOverrideMs;
+        overrideStartMs = nowMs;
         voiceActive = (cmd.source == CMD_SOURCE_VOICE);
         stateChanged = true;
         break;
@@ -199,14 +188,14 @@ void task_control_logic(void *pvParameters)
         fanSpeedPercent = 0;
         autoFanRequest = false;
         overrideMode = OVERRIDE_MODE_FORCE_OFF;
-        overrideUntilMs = nowMs + cfg.manualOverrideMs;
+        overrideStartMs = nowMs;
         voiceActive = (cmd.source == CMD_SOURCE_VOICE);
         stateChanged = true;
         break;
 
       case CMD_FAN_RETURN_AUTO:
         overrideMode = OVERRIDE_MODE_AUTO;
-        overrideUntilMs = 0;
+        overrideStartMs = 0;
         voiceActive = (cmd.source == CMD_SOURCE_VOICE);
         stateChanged = true;
         break;
@@ -218,7 +207,7 @@ void task_control_logic(void *pvParameters)
         fanOn = requestedSpeed > 0;
         autoFanRequest = false;
         overrideMode = fanOn ? OVERRIDE_MODE_FORCE_ON : OVERRIDE_MODE_FORCE_OFF;
-        overrideUntilMs = nowMs + cfg.manualOverrideMs;
+        overrideStartMs = nowMs;
         voiceActive = (cmd.source == CMD_SOURCE_VOICE);
         stateChanged = true;
         break;
@@ -377,9 +366,9 @@ void task_control_logic(void *pvParameters)
         gState.fanSpeedPercent = fanSpeedPercent;
         gState.autoFanRequest = autoFanRequest;
         gState.overrideMode = overrideMode;
-        gState.overrideUntilMs = overrideUntilMs;
+        gState.overrideStartMs = overrideStartMs;
         gState.voiceActive = voiceActive;
-        gState.voiceActiveUntilMs = voiceActive ? (nowMs + cfg.voiceIndicatorHoldMs) : 0;
+        gState.voiceActiveStartMs = voiceActive ? nowMs : 0;
         gState.aiCoolingActiveSinceMs = aiCoolingStartMs;
         gState.aiCoolingElapsedMs = aiElapsedMs;
         gState.aiTargetFanSpeedPercent = aiTargetPercent;

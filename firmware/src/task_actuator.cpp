@@ -12,18 +12,6 @@ constexpr uint8_t FAN_PWM_RESOLUTION_BITS = 8;
 
 Adafruit_NeoPixel extStrip(EXTERNAL_RGB_LED_COUNT, PIN_EXT_RGB, NEO_GRB + NEO_KHZ800);
 
-uint8_t clampPercentValue(int value)
-{
-  if (value < 0)
-  {
-    return 0;
-  }
-  if (value > 100)
-  {
-    return 100;
-  }
-  return static_cast<uint8_t>(value);
-}
 
 uint8_t fanPercentToPwm(const uint8_t percent)
 {

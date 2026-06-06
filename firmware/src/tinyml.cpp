@@ -81,7 +81,7 @@ bool computeGroundTruth(const float avgTemp, const float avgHumi)
 
 void sendTinyMlToWeb(const InferenceResult &result)
 {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   doc["page"] = "tinyml";
   doc["score"] = result.modelScore;
   doc["smooth"] = result.smoothedScore;
@@ -206,24 +206,6 @@ void tiny_ml_task(void *pvParameters)
       }
     }
     previousSmoothedScore = smoothedScore;
-
-    static uint8_t recoveryStableCount = 0;
-
-    const bool clearlyRecovered =
-        (avgTemp < (cfg.tempHotThreshold - 0.7f)) &&
-        (avgHumi < (cfg.humiHumidThreshold - 3.0f));
-
-    if (clearlyRecovered)
-    {
-      if (recoveryStableCount < 255)
-      {
-        recoveryStableCount++;
-      }
-    }
-    else
-    {
-      recoveryStableCount = 0;
-    }
 
     static uint8_t coolConfirmCount = 0;
 

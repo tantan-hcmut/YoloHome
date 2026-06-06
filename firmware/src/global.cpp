@@ -203,7 +203,7 @@ void updateVoiceState(bool active, uint32_t holdMs)
   if (xStateMutex != nullptr && xSemaphoreTake(xStateMutex, pdMS_TO_TICKS(50)) == pdTRUE)
   {
     gState.voiceActive = active;
-    gState.voiceActiveUntilMs = active ? (millis() + holdMs) : 0;
+    gState.voiceActiveStartMs = active ? millis() : 0;
     xSemaphoreGive(xStateMutex);
   }
 
@@ -230,7 +230,11 @@ void refreshIndicatorMode()
 
   SystemIndicatorMode mode = SYS_MODE_BOOT;
 
-  if (gState.sensorTimestampMs != 0 && !gState.sensorValid)
+  if (gState.sensorTimestampMs == 0)
+  {
+    mode = SYS_MODE_BOOT;
+  }
+  else if (!gState.sensorValid)
   {
     mode = SYS_MODE_FAULT;
   }
@@ -261,4 +265,43 @@ void refreshIndicatorMode()
 
   gState.indicatorMode = mode;
   xSemaphoreGive(xStateMutex);
+}
+
+uint8_t clampByteValue(int value, uint8_t minVal, uint8_t maxVal)
+{
+    if (value < minVal) return minVal;
+    if (value > maxVal) return maxVal;
+    return (uint8_t)value;
+}
+
+uint8_t clampPercentValue(int value)
+{
+    if (value < 0) return 0;
+    if (value > 100) return 100;
+    return (uint8_t)value;
+}
+
+void resolveGroupedFeedKeys(const char *prefix, const char *feedSuffix, String &groupKey, String &feedKey)
+{
+  const String rawPrefix = (prefix == nullptr || strlen(prefix) == 0) ? String("yolohome") : String(prefix);
+  const int dotPos = rawPrefix.lastIndexOf('.');
+
+  if (dotPos >= 0)
+  {
+    groupKey = rawPrefix.substring(0, dotPos);
+    String feedBase = rawPrefix.substring(dotPos + 1);
+    if (groupKey.length() == 0)
+    {
+      groupKey = "yolohome";
+    }
+    if (feedBase.length() == 0)
+    {
+      feedBase = groupKey;
+    }
+    feedKey = feedBase + "-" + feedSuffix;
+    return;
+  }
+
+  groupKey = rawPrefix;
+  feedKey = rawPrefix + "-" + feedSuffix;
 }

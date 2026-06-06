@@ -35,60 +35,11 @@ char activeCloudPrefix[32] = {};
 bool enqueueCommand(const CommandMessage &cmd);
 bool enqueueSimple(CommandType type, CommandSource source);
 
-uint8_t clampByteValue(int value)
-{
-  if (value < 0)
-  {
-    return 0;
-  }
-  if (value > 255)
-  {
-    return 255;
-  }
-  return static_cast<uint8_t>(value);
-}
 
-uint8_t clampPercentValue(int value)
-{
-  if (value < 0)
-  {
-    return 0;
-  }
-  if (value > 100)
-  {
-    return 100;
-  }
-  return static_cast<uint8_t>(value);
-}
 
 const char *resolvePrefix(const RuntimeConfig &cfg)
 {
   return strlen(cfg.adafruitFeedPrefix) == 0 ? "yolohome" : cfg.adafruitFeedPrefix;
-}
-
-void resolveGroupedFeedKeys(const char *prefix, const char *feedSuffix, String &groupKey, String &feedKey)
-{
-  const String rawPrefix = (prefix == nullptr || strlen(prefix) == 0) ? String("yolohome") : String(prefix);
-  const int dotPos = rawPrefix.lastIndexOf('.');
-
-  if (dotPos >= 0)
-  {
-    groupKey = rawPrefix.substring(0, dotPos);
-    String feedBase = rawPrefix.substring(dotPos + 1);
-    if (groupKey.length() == 0)
-    {
-      groupKey = "yolohome";
-    }
-    if (feedBase.length() == 0)
-    {
-      feedBase = groupKey;
-    }
-    feedKey = feedBase + "-" + feedSuffix;
-    return;
-  }
-
-  groupKey = rawPrefix;
-  feedKey = rawPrefix + "-" + feedSuffix;
 }
 
 void buildTopic(char *dest, size_t destSize, const char *username, const char *prefix, const char *feedSuffix)
@@ -161,7 +112,7 @@ bool enqueueLightFeedCommand(const String &rawMessage)
 
 void sendWebCloudState(const bool cloudConnected)
 {
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["page"] = "cloud";
   doc["connected"] = cloudConnected;
   String out;
@@ -204,7 +155,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
 
   if (isCommandTopic)
   {
-    StaticJsonDocument<768> doc;
+    JsonDocument doc;
     if (deserializeJson(doc, message) == DeserializationError::Ok)
     {
       const String action = doc["action"] | "";
@@ -254,11 +205,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
         cmd.type = CMD_LIGHT_FORCE_ON;
         cmd.source = source;
         cmd.hasLightColor = true;
-        cmd.rgbR = clampByteValue(doc["r"] | 255);
-        cmd.rgbG = clampByteValue(doc["g"] | 255);
-        cmd.rgbB = clampByteValue(doc["b"] | 255);
+        cmd.rgbR = clampByteValue(doc["r"] | 255, 0, 255);
+        cmd.rgbG = clampByteValue(doc["g"] | 255, 0, 255);
+        cmd.rgbB = clampByteValue(doc["b"] | 255, 0, 255);
         cmd.hasLightBrightness = true;
-        cmd.brightness = clampByteValue(doc["brightness"] | 96);
+        cmd.brightness = clampByteValue(doc["brightness"] | 96, 0, 255);
         enqueueCommand(cmd);
       }
       else if (action.equalsIgnoreCase("light_off"))
@@ -271,11 +222,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
         cmd.type = CMD_LIGHT_SET_RGB;
         cmd.source = source;
         cmd.hasLightColor = true;
-        cmd.rgbR = clampByteValue(doc["r"] | 255);
-        cmd.rgbG = clampByteValue(doc["g"] | 255);
-        cmd.rgbB = clampByteValue(doc["b"] | 255);
+        cmd.rgbR = clampByteValue(doc["r"] | 255, 0, 255);
+        cmd.rgbG = clampByteValue(doc["g"] | 255, 0, 255);
+        cmd.rgbB = clampByteValue(doc["b"] | 255, 0, 255);
         cmd.hasLightBrightness = true;
-        cmd.brightness = clampByteValue(doc["brightness"] | 96);
+        cmd.brightness = clampByteValue(doc["brightness"] | 96, 0, 255);
         enqueueCommand(cmd);
       }
       return;
@@ -319,7 +270,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
 
   if (isConfigTopic)
   {
-    StaticJsonDocument<1024> doc;
+    JsonDocument doc;
     if (deserializeJson(doc, message) != DeserializationError::Ok)
     {
       return;
@@ -344,10 +295,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
       gConfig.fanRampEndPercent = clampPercentValue(doc["fanRampEndPercent"] | gConfig.fanRampEndPercent);
       gConfig.fanRampMidpointMs = max<uint32_t>((doc["fanRampMidMinutes"] | (gConfig.fanRampMidpointMs / 60000UL)) * 60000UL, 60UL * 1000UL);
       gConfig.fanRampFullMs = max<uint32_t>((doc["fanRampFullMinutes"] | (gConfig.fanRampFullMs / 60000UL)) * 60000UL, gConfig.fanRampMidpointMs + 60UL * 1000UL);
-      gConfig.lightDefaultR = clampByteValue(doc["lightR"] | gConfig.lightDefaultR);
-      gConfig.lightDefaultG = clampByteValue(doc["lightG"] | gConfig.lightDefaultG);
-      gConfig.lightDefaultB = clampByteValue(doc["lightB"] | gConfig.lightDefaultB);
-      gConfig.lightDefaultBrightness = clampByteValue(doc["lightBrightness"] | gConfig.lightDefaultBrightness);
+      gConfig.lightDefaultR = clampByteValue(doc["lightR"] | gConfig.lightDefaultR, 0, 255);
+      gConfig.lightDefaultG = clampByteValue(doc["lightG"] | gConfig.lightDefaultG, 0, 255);
+      gConfig.lightDefaultB = clampByteValue(doc["lightB"] | gConfig.lightDefaultB, 0, 255);
+      gConfig.lightDefaultBrightness = clampByteValue(doc["lightBrightness"] | gConfig.lightDefaultBrightness, 0, 255);
       xSemaphoreGive(xConfigMutex);
     }
 
@@ -418,7 +369,7 @@ bool connectMqtt(RuntimeConfig &cfg)
 
 void publishCompactTelemetry(const SystemState &st)
 {
-  StaticJsonDocument<640> doc;
+  JsonDocument doc;
   doc["temp"] = st.temperature;
   doc["humi"] = st.humidity;
   doc["fanOn"] = st.fanOn;
@@ -447,29 +398,48 @@ void publishCompactTelemetry(const SystemState &st)
 
 void publishMirrorFeedSlot(const SystemState &st, const uint8_t slot)
 {
+  static float lastTemp = -999.0f;
+  static float lastHumi = -999.0f;
+  static float lastTinyml = -999.0f;
+  static OverrideMode lastOverride = OVERRIDE_MODE_AUTO;
+  static bool firstStatus = true;
+
   switch (slot % MIRROR_FEED_SLOT_COUNT)
   {
   case 0:
   {
-    const String tempValue = String(st.temperature, 2);
-    mqttClient.publish(topicTemp, tempValue.c_str());
+    if (abs(st.temperature - lastTemp) >= 0.1f) {
+      const String tempValue = String(st.temperature, 2);
+      mqttClient.publish(topicTemp, tempValue.c_str());
+      lastTemp = st.temperature;
+    }
     break;
   }
   case 1:
   {
-    const String humiValue = String(st.humidity, 2);
-    mqttClient.publish(topicHumi, humiValue.c_str());
+    if (abs(st.humidity - lastHumi) >= 0.5f) {
+      const String humiValue = String(st.humidity, 2);
+      mqttClient.publish(topicHumi, humiValue.c_str());
+      lastHumi = st.humidity;
+    }
     break;
   }
   case 2:
   {
-    const String tinymlValue = String(st.tinymlSmoothedScore, 3);
-    mqttClient.publish(topicTinyml, tinymlValue.c_str());
+    if (abs(st.tinymlSmoothedScore - lastTinyml) >= 0.02f) {
+      const String tinymlValue = String(st.tinymlSmoothedScore, 3);
+      mqttClient.publish(topicTinyml, tinymlValue.c_str());
+      lastTinyml = st.tinymlSmoothedScore;
+    }
     break;
   }
   case 3:
   default:
-    mqttClient.publish(topicStatus, overrideModeToText(st.overrideMode));
+    if (firstStatus || st.overrideMode != lastOverride) {
+      mqttClient.publish(topicStatus, overrideModeToText(st.overrideMode));
+      lastOverride = st.overrideMode;
+      firstStatus = false;
+    }
     break;
   }
 }
@@ -534,7 +504,7 @@ void task_adafruit_io(void *pvParameters)
 
         if (lastTelemetryMs == 0 || (nowMs - lastTelemetryMs) >= effectiveTelemetryPeriodMs)
         {
-          getSystemState(st);
+
           publishCompactTelemetry(st);
           lastTelemetryMs = nowMs;
 
@@ -547,7 +517,7 @@ void task_adafruit_io(void *pvParameters)
 
         if (lastMirrorMs == 0 || (nowMs - lastMirrorMs) >= MIRROR_FEED_INTERVAL_MS)
         {
-          getSystemState(st);
+
           publishMirrorFeedSlot(st, mirrorFeedSlot);
           mirrorFeedSlot = static_cast<uint8_t>((mirrorFeedSlot + 1U) % MIRROR_FEED_SLOT_COUNT);
           lastMirrorMs = nowMs;

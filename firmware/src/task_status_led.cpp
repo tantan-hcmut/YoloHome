@@ -33,39 +33,7 @@ void setOnboardRgb(const RuntimeConfig &cfg, uint8_t r, uint8_t g, uint8_t b, ui
   onboardRgb.show();
 }
 
-SystemIndicatorMode resolveIndicatorMode(const SystemState &st, const uint32_t nowMs, const uint32_t bootStartedMs)
-{
-  if ((nowMs - bootStartedMs) < BOOT_INDICATOR_GRACE_MS && st.sensorTimestampMs == 0)
-  {
-    return SYS_MODE_BOOT;
-  }
 
-  if (st.sensorTimestampMs != 0 && !st.sensorValid)
-  {
-    return SYS_MODE_FAULT;
-  }
-  if (st.voiceActive)
-  {
-    return SYS_MODE_VOICE_ACTIVE;
-  }
-  if (st.overrideMode != OVERRIDE_MODE_AUTO)
-  {
-    return SYS_MODE_MANUAL_LOCKDOWN;
-  }
-  if (st.autoFanRequest && st.fanOn)
-  {
-    return SYS_MODE_AI_COOLING;
-  }
-  if (st.apModeActive && !st.wifiConnected)
-  {
-    return SYS_MODE_AP_CONFIG;
-  }
-  if (st.wifiConnected && !st.cloudConnected)
-  {
-    return SYS_MODE_WIFI_ONLY;
-  }
-  return SYS_MODE_NORMAL;
-}
 
 void publishResolvedMode(SystemIndicatorMode mode)
 {
@@ -117,7 +85,7 @@ void task_status_led(void *pvParameters)
     }
 
     const uint32_t nowMs = millis();
-    const SystemIndicatorMode effectiveMode = resolveIndicatorMode(st, nowMs, bootStartedMs);
+    const SystemIndicatorMode effectiveMode = st.indicatorMode;
     if (effectiveMode != st.indicatorMode)
     {
       st.indicatorMode = effectiveMode;
