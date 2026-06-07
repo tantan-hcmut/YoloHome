@@ -28,7 +28,6 @@ DisplayState computeDisplayState(const TempLevel tempLevel, const HumiLevel humi
 
 void updateLcd(const SensorFrame &frame)
 {
-  lcd.clear();
   lcd.setCursor(0, 0);
   switch (frame.displayState)
   {
@@ -45,12 +44,12 @@ void updateLcd(const SensorFrame &frame)
   }
 
   lcd.setCursor(0, 1);
-  lcd.printf("T:%2.1fC H:%2.0f%%", frame.temperature, frame.humidity);
+  lcd.printf("T:%2.1fC H:%2.0f%%   ", frame.temperature, frame.humidity);
 }
 
 void sendSensorToWeb(const SensorFrame &frame)
 {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   doc["page"] = "sensor";
   doc["temp"] = frame.temperature;
   doc["humi"] = frame.humidity;
@@ -70,6 +69,7 @@ void temp_humi_monitor(void *pvParameters)
 {
   (void)pvParameters;
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+  Wire.setClock(100000);
   dht20.begin();
 
   lcd.begin();
@@ -89,10 +89,16 @@ void temp_humi_monitor(void *pvParameters)
     SensorFrame frame = {};
     frame.timestampMs = millis();
 
-    dht20.read();
+    int dhtStatus = dht20.read();
     frame.temperature = dht20.getTemperature();
     frame.humidity = dht20.getHumidity();
-    frame.valid = !isnan(frame.temperature) && !isnan(frame.humidity);
+    frame.valid = !isnan(frame.temperature) && !isnan(frame.humidity) &&
+                  frame.temperature >= -40.0f && frame.temperature <= 80.0f &&
+                  frame.humidity >= 0.0f && frame.humidity <= 100.0f;
+    
+    if (!frame.valid && dhtStatus < 0) {
+        Serial.printf("[Sensor] Error reading DHT20. Status: %d\n", dhtStatus);
+    }
 
     if (!frame.valid)
     {

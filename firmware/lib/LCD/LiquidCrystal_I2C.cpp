@@ -32,7 +32,9 @@ LiquidCrystal_I2C::LiquidCrystal_I2C(uint8_t lcd_addr, uint8_t lcd_cols, uint8_t
 }
 
 void LiquidCrystal_I2C::begin() {
-	Wire.begin();
+	// Wire.begin() removed: the application must configure I2C
+	// pins before calling this method. Calling Wire.begin()
+	// without arguments can reset ESP32 I2C to wrong default pins.
 	_displayfunction = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
 
 	if (_rows > 1) {

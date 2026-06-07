@@ -10,6 +10,14 @@
 
 #include "app_types.h"
 
+inline uint32_t elapsedSince(uint32_t startMs) {
+    return (uint32_t)(millis() - startMs);
+}
+
+uint8_t clampByteValue(int value, uint8_t minVal, uint8_t maxVal);
+uint8_t clampPercentValue(int value);
+void resolveGroupedFeedKeys(const char *prefix, const char *feedSuffix, String &groupKey, String &feedKey);
+
 constexpr float TEMP_COLD_THRESHOLD_DEFAULT = 24.0f;
 constexpr float TEMP_HOT_THRESHOLD_DEFAULT = 32.0f;
 constexpr float HUMI_DRY_THRESHOLD_DEFAULT = 30.0f;
@@ -17,6 +25,9 @@ constexpr float HUMI_HUMID_THRESHOLD_DEFAULT = 80.0f;
 
 constexpr float AI_ON_THRESHOLD_DEFAULT = 0.68f;
 constexpr float AI_OFF_THRESHOLD_DEFAULT = 0.48f;
+
+constexpr float AI_GAP_MIN = 0.08f;
+constexpr float AI_GAP_MAX = 0.22f;
 
 constexpr uint32_t SENSOR_PERIOD_MS_DEFAULT = 2000;
 constexpr uint32_t INFERENCE_PERIOD_MS_DEFAULT = 2000;

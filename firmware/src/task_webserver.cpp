@@ -5,12 +5,16 @@ AsyncWebSocket ws("/ws");
 
 bool webserver_isrunning = false;
 
-void Webserver_sendata(String data)
+static SemaphoreHandle_t xWsMutex = nullptr;
+
+void Webserver_sendata(const String &data)
 {
-    if (ws.count() > 0)
+    if (ws.count() > 0 && xWsMutex != nullptr &&
+        xSemaphoreTake(xWsMutex, pdMS_TO_TICKS(50)) == pdTRUE)
     {
         ws.textAll(data);
-        Serial.println("[WS] TX => " + data);
+        Serial.printf("[WS] TX => %s\n", data.c_str());
+        xSemaphoreGive(xWsMutex);
     }
 }
 
@@ -33,16 +37,29 @@ void onEvent(AsyncWebSocket *server,
     else if (type == WS_EVT_DATA)
     {
         AwsFrameInfo *info = reinterpret_cast<AwsFrameInfo *>(arg);
-        if (info->opcode == WS_TEXT && info->final && info->index == 0)
+        if (info->message_opcode == WS_TEXT)
         {
-            String message(reinterpret_cast<const char *>(data), len);
-            handleWebSocketMessage(message);
+            static String clientMsgBuf[8];
+            const uint32_t idx = client->id() % 8;
+
+            if (info->index == 0)
+            {
+                clientMsgBuf[idx] = "";
+            }
+            clientMsgBuf[idx].concat(reinterpret_cast<const char *>(data), len);
+
+            if (info->index + len == info->len && info->final)
+            {
+                handleWebSocketMessage(clientMsgBuf[idx]);
+                clientMsgBuf[idx] = "";
+            }
         }
     }
 }
 
 void connnectWSV()
 {
+    if (xWsMutex == nullptr) xWsMutex = xSemaphoreCreateMutex();
     ws.onEvent(onEvent);
     server.addHandler(&ws);
 

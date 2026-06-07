@@ -42,7 +42,7 @@ void setup()
 
   xTaskCreatePinnedToCore(temp_humi_monitor,
                           "SensorTask",
-                          4096,
+                          6144,
                           nullptr,
                           3,
                           nullptr,
@@ -50,7 +50,7 @@ void setup()
 
   xTaskCreatePinnedToCore(tiny_ml_task,
                           "TinyMLTask",
-                          8192,
+                          12288,
                           nullptr,
                           2,
                           nullptr,
@@ -58,7 +58,7 @@ void setup()
 
   xTaskCreatePinnedToCore(task_control_logic,
                           "ControlLogicTask",
-                          4096,
+                          6144,
                           nullptr,
                           4,
                           nullptr,
@@ -74,7 +74,7 @@ void setup()
 
   xTaskCreatePinnedToCore(task_adafruit_io,
                           "AdafruitIoTask",
-                          6144,
+                          8192,
                           nullptr,
                           2,
                           nullptr,

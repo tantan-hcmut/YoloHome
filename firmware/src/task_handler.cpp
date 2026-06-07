@@ -101,7 +101,7 @@ String indicatorModeToString(SystemIndicatorMode mode)
 
 void sendSimplePage(const char *page)
 {
-  StaticJsonDocument<128> doc;
+  JsonDocument doc;
   doc["page"] = page;
   String out;
   serializeJson(doc, out);
@@ -110,7 +110,7 @@ void sendSimplePage(const char *page)
 
 void sendAck(const char *page, const char *message)
 {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   doc["page"] = page;
   doc["message"] = message;
   String out;
@@ -120,8 +120,10 @@ void sendAck(const char *page, const char *message)
 
 String buildFeedName(const char *prefix, const char *suffix)
 {
-  const String resolvedPrefix = (prefix == nullptr || strlen(prefix) == 0) ? String("yolohome") : String(prefix);
-  return resolvedPrefix + "-" + suffix;
+  String groupKey;
+  String feedKey;
+  resolveGroupedFeedKeys(prefix, suffix, groupKey, feedKey);
+  return groupKey + "." + feedKey;
 }
 
 void sendConfigToWeb()
@@ -131,7 +133,7 @@ void sendConfigToWeb()
   getRuntimeConfig(cfg);
   getSystemState(st);
 
-  DynamicJsonDocument resp(4096);
+  JsonDocument resp;
   resp["page"] = "config";
   JsonObject value = resp.createNestedObject("value");
 
@@ -266,7 +268,9 @@ void sendConfigToWeb()
   runtime["cloudConnected"] = st.cloudConnected;
   runtime["sensorValid"] = st.sensorValid;
   runtime["overrideMode"] = overrideModeToString(st.overrideMode);
-  runtime["overrideRemainingMs"] = (st.overrideUntilMs > millis()) ? (st.overrideUntilMs - millis()) : 0;
+  uint32_t elapsedOverride = elapsedSince(st.overrideStartMs);
+  runtime["overrideRemainingMs"] = (st.overrideMode != OVERRIDE_MODE_AUTO && elapsedOverride < cfg.manualOverrideMs) 
+                                   ? (cfg.manualOverrideMs - elapsedOverride) : 0;
   runtime["indicatorMode"] = indicatorModeToString(st.indicatorMode);
   runtime["fanOn"] = st.fanOn;
   runtime["fanSpeedPercent"] = st.fanSpeedPercent;
@@ -407,7 +411,7 @@ void handleThreshold(const JsonObject &value)
 
   gConfig.sensorPeriodMs = clampMs(value["sensorPeriodMs"] | gConfig.sensorPeriodMs, 500, 60000);
   gConfig.inferencePeriodMs = clampMs(value["inferencePeriodMs"] | gConfig.inferencePeriodMs, 500, 60000);
-  gConfig.telemetryPeriodMs = clampMs(value["telemetryPeriodMs"] | gConfig.telemetryPeriodMs, 5000, 120000);
+  gConfig.telemetryPeriodMs = clampMs(value["telemetryPeriodMs"] | gConfig.telemetryPeriodMs, 30000, 120000);
   const uint32_t overrideMinutes = value["overrideMinutes"] | (gConfig.manualOverrideMs / 60000UL);
   gConfig.manualOverrideMs = clampMs(overrideMinutes * 60000UL, 10000, 24UL * 60UL * 60000UL);
   gConfig.voiceIndicatorHoldMs = clampMs(value["voiceHoldMs"] | gConfig.voiceIndicatorHoldMs, 1000, 60000);
@@ -467,17 +471,15 @@ void handleThreshold(const JsonObject &value)
     gConfig.aiOnThreshold = constrain(mid + 0.05f, 0.0f, 1.0f);
   }
 
-  const float minGap = 0.05f;
-  const float maxGap = 0.12f;
   float gap = gConfig.aiOnThreshold - gConfig.aiOffThreshold;
 
-  if (gap < minGap)
+  if (gap < AI_GAP_MIN)
   {
-    gConfig.aiOffThreshold = constrain(gConfig.aiOnThreshold - minGap, 0.0f, 1.0f);
+    gConfig.aiOffThreshold = constrain(gConfig.aiOnThreshold - AI_GAP_MIN, 0.0f, 1.0f);
   }
-  else if (gap > maxGap)
+  else if (gap > AI_GAP_MAX)
   {
-    gConfig.aiOffThreshold = constrain(gConfig.aiOnThreshold - maxGap, 0.0f, 1.0f);
+    gConfig.aiOffThreshold = constrain(gConfig.aiOnThreshold - AI_GAP_MAX, 0.0f, 1.0f);
   }
 
   if (gConfig.fanRampMidPercent < gConfig.fanRampStartPercent)
@@ -655,7 +657,7 @@ void handleVoice(const JsonObject &value)
 
 void handleWebSocketMessage(String message)
 {
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   const DeserializationError error = deserializeJson(doc, message);
   if (error)
   {

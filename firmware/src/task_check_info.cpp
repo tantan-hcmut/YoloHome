@@ -8,19 +8,6 @@ namespace
 {
 constexpr const char *kInfoPath = "/info.dat";
 
-uint8_t clampPercentValue(int value)
-{
-  if (value < 0)
-  {
-    return 0;
-  }
-  if (value > 100)
-  {
-    return 100;
-  }
-  return static_cast<uint8_t>(value);
-}
-
 bool isHexColorString(const char *value)
 {
   if (value == nullptr || strlen(value) != 7 || value[0] != '#')
@@ -74,17 +61,15 @@ static void clampLoadedConfig(RuntimeConfig &cfg)
     cfg.aiOnThreshold = constrain(mid + 0.05f, 0.0f, 1.0f);
   }
 
-  const float minGap = 0.08f;
-  const float maxGap = 0.22f;
   float gap = cfg.aiOnThreshold - cfg.aiOffThreshold;
 
-  if (gap < minGap)
+  if (gap < AI_GAP_MIN)
   {
-    cfg.aiOffThreshold = constrain(cfg.aiOnThreshold - minGap, 0.0f, 1.0f);
+    cfg.aiOffThreshold = constrain(cfg.aiOnThreshold - AI_GAP_MIN, 0.0f, 1.0f);
   }
-  else if (gap > maxGap)
+  else if (gap > AI_GAP_MAX)
   {
-    cfg.aiOffThreshold = constrain(cfg.aiOnThreshold - maxGap, 0.0f, 1.0f);
+    cfg.aiOffThreshold = constrain(cfg.aiOnThreshold - AI_GAP_MAX, 0.0f, 1.0f);
   }
 
   cfg.sensorPeriodMs = max<uint32_t>(cfg.sensorPeriodMs, 500);
@@ -136,7 +121,7 @@ static void clampLoadedConfig(RuntimeConfig &cfg)
 
 static bool writeConfigToFile(const RuntimeConfig &cfg)
 {
-  DynamicJsonDocument doc(6144);
+  JsonDocument doc;
   doc["wifi_ssid"] = cfg.wifiSsid;
   doc["wifi_pass"] = cfg.wifiPass;
   doc["aio_username"] = cfg.adafruitUsername;
@@ -193,7 +178,7 @@ void Load_info_File()
     return;
   }
 
-  DynamicJsonDocument doc(6144);
+  JsonDocument doc;
   const DeserializationError error = deserializeJson(doc, file);
   file.close();
 

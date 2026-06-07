@@ -202,7 +202,7 @@ struct SystemState
   uint8_t fanSpeedPercent;
   bool autoFanRequest;
   OverrideMode overrideMode;
-  uint32_t overrideUntilMs;
+  uint32_t overrideStartMs;
 
   // Runtime visibility for the AI cooling ramp.
   uint32_t aiCoolingActiveSinceMs;
@@ -219,7 +219,7 @@ struct SystemState
   bool cloudConnected;
   bool apModeActive;
   bool voiceActive;
-  uint32_t voiceActiveUntilMs;
+  uint32_t voiceActiveStartMs;
 
   SystemIndicatorMode indicatorMode;
   uint32_t sensorTimestampMs;
